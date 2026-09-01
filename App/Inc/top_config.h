@@ -26,12 +26,19 @@
 #define KEY 			emKeyDeviceNum0		//KEY按键
 
 //Comm设备
+<<<<<<< HEAD
 // 根据实际使用的串口修改
 #define BSP_UART_HANDLE      huart1          // 对应CubeMX生成的句柄
 #define BSP_UART_INSTANCE    UART1          // 串口实例
 #define BSP_UART_IRQ         UART1_IRQn     // 中断号
 #define BSP_UART_IRQHandler  UART1_IRQHandler // 中断服务函数
 #define BSP_UART_TIMEOUT     1000
+=======
+#define COMM_DEVICE_NUM 		1		//Comm设备数量
+#define COMM_RX_BUF_SIZE 		128		//串口接收环形缓冲区大小
+#define COMM 		emCommDeviceNum0		//Comm设备0
+
+>>>>>>> 13998c3cc676588ccb947765ce013261908544a0
 //PWM设备
 #define PWM_DEVICE_NUM 		1		//PWM设备数量
 #define PWM 		emPwmDeviceNum0		//PWM设备0
@@ -64,6 +71,21 @@
  * 增益推导: V_sense = I×RSENSE×AMP → ADC_CUR_GAIN = 1/(RSENSE×AMP) (A/V)。
  * 当前 RSENSE=0.01Ω(10mΩ)×AMP=16.5, 增益≈6.0606 A/V,
  * 满量程 ±1.65V ↔ ±10A。 */
+<<<<<<< HEAD
+=======
+#define ADC_REFER 			1.65f		//LM324中点参考电压(V), 3.3V供电分压
+#define ADC_ADC_REF 			3.3f		//ADC满量程参考电压(V)
+#define ADC_RSENSE 			0.01f		//低边采样电阻(Ω): 10mΩ
+#define ADC_CUR_AMP 			16.5f		//LM324放大倍数
+#define ADC_CUR_GAIN 			(1.0f/(ADC_RSENSE*ADC_CUR_AMP))	//电流增益(A/V) = 1/(0.01×16.5) ≈ 6.0606
+#define ADC_UDC_GAIN 			23.0f		//母线电压增益(220K/10K=23)
+
+//电流采样有效性与保护参数
+#define ADC_RAW_MIN 			124		//LM324输出有效下限(raw): 0.1V≈124LSB, 低于此判饱和/断线
+#define ADC_RAW_MAX 			3971	//LM324输出有效上限(raw): 3.2V≈3971LSB, 高于此判饱和
+#define ADC_OFFSET_RAW_TOL 		200		//校准偏置与理论中点(1.65V≈2048LSB)允许偏差(raw), 超出判校准异常
+#define ADC_OC_CURRENT_A 		9.0f	//过流阈值(A), 任一相|I|超此值置过流标志(满量程±10A的90%)
+>>>>>>> 13998c3cc676588ccb947765ce013261908544a0
 
 //零点对齐与开环驱动流程配置(user.c接入)
 #define FOC_OL_ENABLE 			1		//1=上电后自动零点对齐并开环运行; 0=仅做电流/编码器采样
