@@ -26,7 +26,7 @@ void vKeyDeviceInit(stKeyStaticParameTdf *pstInit, enumKeyDeviceNumTdf emDeviceN
 	arrystKeyDeviceparam[emDeviceNum].KeyStaticParame.u16GPIOPin = pstInit->u16GPIOPin;
 	arrystKeyDeviceparam[emDeviceNum].KeyStaticParame.emKeyLevel = pstInit->emKeyLevel;
 	/* 动态参数复位 */
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus = emKeystatus_Off;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus = emKeystatusOff;
 	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8DebouncePending = 0;
 	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u32DebounceTick = 0;
 	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8PressEvent = 0;
@@ -68,7 +68,7 @@ void vKeyScan(void)
 						== (GPIO_PinState)arrystKeyDeviceparam[u8Index].KeyStaticParame.emKeyLevel);
 
 		/* 当前稳定状态换算为是否按下 */
-		u8StablePressed = (uint8_t)(arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus == emKeystatus_On);
+		u8StablePressed = (uint8_t)(arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus == emKeystatusOn);
 
 		if (u8RawPressed == u8StablePressed)
 		{
@@ -90,12 +90,12 @@ void vKeyScan(void)
 				arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8DebouncePending = 0;
 				if (u8RawPressed != 0)
 				{
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatus_On;
+					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatusOn;
 					arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8PressEvent = 1;
 				}
 				else
 				{
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatus_Off;
+					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatusOff;
 					arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8ReleaseEvent = 1;
 				}
 			}
@@ -110,7 +110,7 @@ void vKeyScan(void)
  **/
 uint8_t u8KeyIsPressed(enumKeyDeviceNumTdf emDeviceNum)
 {
-	return (uint8_t)(arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus == emKeystatus_On);
+	return (uint8_t)(arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus == emKeystatusOn);
 }
 /**
  * 	@brief 								查询Key按下事件

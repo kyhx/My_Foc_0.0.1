@@ -47,6 +47,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     BSP/Src/key_driver.c
     BSP/Src/led_driver.c
+    BSP/Src/AS5047P_driver.c
+    BSP/Src/DRV8313_driver.c
     App/Src/user.c
 
 )
