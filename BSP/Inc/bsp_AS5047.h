@@ -1,21 +1,25 @@
 /**
- * @file					AS5047P_driver.h
- * @author 					可以航行
- * @version 				0.2
- * @date 					2026/9/1
- * @brief 					AS5047P驱动(普通阻塞模式 + DMA非阻塞模式),HAL库,STM32G431
- *
- * 支持两种SPI传输方式,用于FOC转子角度获取:
- *  - emAS5047PTransferMode_Polling: 普通阻塞模式,调用HAL_SPI_TransmitReceive,简单可靠,单帧约6us。
- *  - emAS5047PTransferMode_DMA:     DMA非阻塞模式,调用HAL_SPI_TransmitReceive_DMA,不占CPU,
- *                                    配合主循环/电流环周期调用完成连续角度更新。
- *
- **/
+  ******************************************************************************
+  * @file    bsp_AS5047.h
+  * @brief   AS5047PBSP层头文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * AS5047P驱动(普通阻塞模式 + DMA非阻塞模式),HAL库,STM32G431
+  *
+  * 支持两种SPI传输方式,用于FOC转子角度获取:
+  *  - emAS5047PTransferMode_Polling: 普通阻塞模式,调用HAL_SPI_TransmitReceive,简单可靠,单帧约6us。
+  *  - emAS5047PTransferMode_DMA:     DMA非阻塞模式,调用HAL_SPI_TransmitReceive_DMA,不占CPU,
+  *                                    配合主循环/电流环周期调用完成连续角度更新。
+  ******************************************************************************
+  */
+  
+#ifndef __BSP_AS5047P__H
+#define __BSP_AS5047P__H
 
-#ifndef __AS5047P_DRIVER_H
-#define __AS5047P_DRIVER_H
-
-#include "top_config.h"
+#include "bsp_config.h"
 #include "main.h"
 
 /**	@brief 				AS5047P设备号枚举
@@ -39,6 +43,17 @@ typedef enum
 }
 enumAS5047PTransferModeTdf;
 
+/**	@brief 				AS5047P标志电平枚举
+ * 	@note
+ *
+ **/
+typedef enum
+{
+	emAS5047PFlag_Reset = 0,	//标志复位(0)
+	emAS5047PFlag_Set,			//标志置位(1)
+}
+enumAS5047PFlagTdf;
+
 /**	@brief 				SPI静态参数结构体定义
  * 	@note
  *
@@ -50,6 +65,7 @@ typedef struct
 	uint16_t 					u16CsPin;			//片选CS对应的GPIOPin
 	uint16_t 					u16Timeout;			//普通模式单帧传输超时(ms),0则用默认10
 	uint32_t 					u32MaxCount;		//编码器每圈码值(默认16384,可配置)
+	uint16_t 					u16PolePairs;		//电机极对数(机械角→电角度),0则用默认1
 	enumAS5047PTransferModeTdf 	emTransferMode;		//传输模式: Polling / DMA
 }
 stAS5047PStaticParameTdf;
@@ -62,9 +78,11 @@ typedef struct
 {
 	uint16_t 					u16Angle;			//最近一次角度(0~0x3FFF)
 	uint32_t 					u32AngleRaw;		//最近一次角度原始帧值(含状态位)
-	volatile uint8_t 			u8Error;			//错误标志(上次传输超时/命令帧错误)
-	volatile uint8_t 			u8Busy;				//DMA传输进行中标志(1=正在传输)
-	volatile uint8_t 			u8DmaDone;			//DMA传输完成标志(1=本次已完成待处理)
+	float 						fAngleElecRad;		//电角度(弧度,0~2π)
+	float 						fAngleElecDeg;		//电角度(度,0~360)
+	volatile enumAS5047PFlagTdf emError;			//错误标志(上次传输超时/命令帧错误)
+	volatile enumAS5047PFlagTdf emBusy;				//DMA传输进行中标志
+	volatile enumAS5047PFlagTdf emDmaDone;			//DMA传输完成标志
 	uint16_t 					u16TxBuf;			//DMA发送缓冲(命令帧)
 	uint16_t 					u16RxBuf;			//DMA接收缓冲(返回帧)
 }
@@ -93,7 +111,7 @@ typedef struct
 	int16_t 					i16Delta;			//本次增量(±CPR/2内),供上层测速
 	float 						fAngleRad;			//单圈角度(弧度)
 	float 						fAngleDeg;			//单圈角度(度)
-	uint8_t 					u8Started;			//是否已启动
+	enumAS5047PFlagTdf 			emStarted;			//是否已启动
 }
 stAS5047PENCDynamicParameTdf;
 
@@ -156,6 +174,8 @@ float 	 fAS5047PEncGetAngleDeg(enumAS5047PDeviceNumTdf emDeviceNum);
 /** 通用读取接口 */
 uint16_t u16AS5047PGetAngle(enumAS5047PDeviceNumTdf emDeviceNum);
 float 	 fAS5047PGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum);
+float 	 fAS5047PGetAngleElecRad(enumAS5047PDeviceNumTdf emDeviceNum);
+float 	 fAS5047PGetAngleElecDeg(enumAS5047PDeviceNumTdf emDeviceNum);
 uint8_t  u8AS5047PGetError(enumAS5047PDeviceNumTdf emDeviceNum);
 uint8_t  u8AS5047PIsBusy(enumAS5047PDeviceNumTdf emDeviceNum);
 

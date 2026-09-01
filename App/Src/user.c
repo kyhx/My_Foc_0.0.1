@@ -6,16 +6,17 @@
  * @brief 				用户代码执行
  * */
 
-#include "led_driver.h"
-#include "key_driver.h"
-#include "AS5047P_driver.h"
-#include "DRV8313_driver.h"
+#include "bsp_led.h"
+#include "bsp_key.h"
+#include "bsp_AS5047.h"
+#include "bsp_DRV8313.h"
 #include "adc.h"
 #include "spi.h"
 #include "tim.h"
 #include "user.h"
 #include "top_config.h"
-
+#include "bsp_uart.h"
+#include "oscilloscope.h"
 
 
 void vLedInit()
@@ -44,6 +45,7 @@ void vAS5047PInit()
 	stInit. u16CsPin       = SPI1_NSS_Pin;
 	stInit. u16Timeout     = 10;					//普通模式单帧超时(ms)
 	stInit. u32MaxCount    = SPI_AS5047P_MAX_COUNT;	//每圈16384码
+	stInit. u16PolePairs   = MOTOR_POLE_PAIRS;		//电机极对数(机械角→电角度)
 	/** 传输方式选择:
 	 *  - emAS5047PTransferMode_DMA:     非阻塞,主循环周期调 vAS5047PUpdate 持续更新
 	 *  - emAS5047PTransferMode_Polling: 阻塞,单帧约6us,简单可靠 */
@@ -82,6 +84,23 @@ void vDRV8313Init()
 	vDRV8313StartDMA(DRV8313);			//启动普通组+DMA: 循环采样母线电压
 }
 
+void vUartInit()
+{
+	stUartStaticParameTdf stInit;
+
+	stInit.pstUartHandle  = &huart1;
+	stInit.u16Timeout     = UART_DEFAULT_TIMEOUT;
+	stInit.emTransferMode = emUartTransferMode_DMA;
+	vUartDeviceInit(&stInit, emUartDeviceNum0);
+
+	/* 启动中断单字节接收 */
+	enUartReceiveByteIT(emUartDeviceNum0);
+
+}
+
+
+
+
 
 void vUserInit()
 {
@@ -91,6 +110,11 @@ void vUserInit()
 	vKeyInit();
 	vAS5047PInit();
 	vDRV8313Init();
+	vUartInit();
+	
+	/** 示波器应用初始化 */
+	OSc_Init();
+
 
 
 }
@@ -115,13 +139,10 @@ void vUserExecute()
 	 *    获取后可用 fAS5047PEncGetAngleRad(AS5047P) 得到ABI单圈角度 */
 	vAS5047PEncUpdate(AS5047P);
 
-	/** 2.2 DRV8313: 母线电压更新(DMA)、错误状态读取
-	 *    三相电流由注入组中断回调自动更新,可用 fDRV8313GetCurrentA(DRV8313,0~2) 获取 */
-	vDRV8313UpdateBusVoltage(DRV8313);
-	u8DRV8313GetFault(DRV8313);
-	fDRV8313GetCurrentA(DRV8313,0);	//Ia
-	fDRV8313GetCurrentA(DRV8313,1);	//Ib
-	fDRV8313GetCurrentA(DRV8313,2);	//Ic
+	
+	/** 2.2 示波器应用: 1kHz周期上报多通道数据到VOFA+ */
+	OSc_Task();
+
 	/** 3. 500ms状态指示: LED闪烁指示系统运行 */
 	if ((HAL_GetTick() - u32LastTick) >= 500)
 	{

@@ -1,14 +1,18 @@
 /**
- * @file					key_driver.c
- * @author 					可以航行
- * @version 				0.1
- * @date 					2026/8/20
- * @brief 					Key驱动代码
- *
- **/
+  ******************************************************************************
+  * @file    bsp_key.c
+  * @brief   KeyBSP层源文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * 本文件实现Key硬件抽象层，封装HAL库操作
+  ******************************************************************************
+  */
 
-#include	"key_driver.h"
-#include	"top_config.h"
+#include	"bsp_key.h"
+#include	"bsp_config.h"
 
 
 //【0】Key设备。
@@ -27,10 +31,10 @@ void vKeyDeviceInit(stKeyStaticParameTdf *pstInit, enumKeyDeviceNumTdf emDeviceN
 	arrystKeyDeviceparam[emDeviceNum].KeyStaticParame.emKeyLevel = pstInit->emKeyLevel;
 	/* 动态参数复位 */
 	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus = emKeystatusOff;
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8DebouncePending = 0;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emDebouncePending = emKeyFlag_Reset;
 	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u32DebounceTick = 0;
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8PressEvent = 0;
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8ReleaseEvent = 0;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emPressEvent = emKeyFlag_Reset;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emReleaseEvent = emKeyFlag_Reset;
 }
 /**
  * @brief 								取得Key设备参数
@@ -52,6 +56,7 @@ const stKeyDeviceParameTdf *c_pstGetKeyDeviceParame(enumKeyDeviceNumTdf emDevice
  **/
 void vKeyScan(void)
 {
+	stKeyDeviceParameTdf *pstDev;
 	uint32_t u32NowTick;
 	uint8_t u8RawPressed;
 	uint8_t u8StablePressed;
@@ -61,42 +66,44 @@ void vKeyScan(void)
 
 	for (u8Index = 0; u8Index < KEY_DEVICE_NUM; u8Index++)
 	{
+		pstDev = &arrystKeyDeviceparam[u8Index];
+
 		/* 读取引脚原始电平,并换算为是否按下(按下电平可配置) */
 		u8RawPressed = (uint8_t)(HAL_GPIO_ReadPin(
-						arrystKeyDeviceparam[u8Index].KeyStaticParame.pstGPIOBase,
-						arrystKeyDeviceparam[u8Index].KeyStaticParame.u16GPIOPin)
-						== (GPIO_PinState)arrystKeyDeviceparam[u8Index].KeyStaticParame.emKeyLevel);
+						pstDev->KeyStaticParame.pstGPIOBase,
+						pstDev->KeyStaticParame.u16GPIOPin)
+						== (GPIO_PinState)pstDev->KeyStaticParame.emKeyLevel);
 
 		/* 当前稳定状态换算为是否按下 */
-		u8StablePressed = (uint8_t)(arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus == emKeystatusOn);
+		u8StablePressed = (uint8_t)(pstDev->KeyDynamicParame.emKeystatus == emKeystatusOn);
 
 		if (u8RawPressed == u8StablePressed)
 		{
 			/* 原始状态与稳定状态一致,清除消抖等待 */
-			arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8DebouncePending = 0;
+			pstDev->KeyDynamicParame.emDebouncePending = emKeyFlag_Reset;
 		}
 		else
 		{
 			/* 原始状态与稳定状态不一致,进入消抖等待 */
-			if (arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8DebouncePending == 0)
+			if (pstDev->KeyDynamicParame.emDebouncePending == emKeyFlag_Reset)
 			{
-				arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8DebouncePending = 1;
-				arrystKeyDeviceparam[u8Index].KeyDynamicParame.u32DebounceTick = u32NowTick;
+				pstDev->KeyDynamicParame.emDebouncePending = emKeyFlag_Set;
+				pstDev->KeyDynamicParame.u32DebounceTick = u32NowTick;
 			}
-			else if ((u32NowTick - arrystKeyDeviceparam[u8Index].KeyDynamicParame.u32DebounceTick)
+			else if ((u32NowTick - pstDev->KeyDynamicParame.u32DebounceTick)
 						>= KEY_DEBOUNCE_TIME)
 			{
 				/* 消抖时间到,确认状态切换,并置起对应事件标志 */
-				arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8DebouncePending = 0;
+				pstDev->KeyDynamicParame.emDebouncePending = emKeyFlag_Reset;
 				if (u8RawPressed != 0)
 				{
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatusOn;
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8PressEvent = 1;
+					pstDev->KeyDynamicParame.emKeystatus = emKeystatusOn;
+					pstDev->KeyDynamicParame.emPressEvent = emKeyFlag_Set;
 				}
 				else
 				{
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.emKeystatus = emKeystatusOff;
-					arrystKeyDeviceparam[u8Index].KeyDynamicParame.u8ReleaseEvent = 1;
+					pstDev->KeyDynamicParame.emKeystatus = emKeystatusOff;
+					pstDev->KeyDynamicParame.emReleaseEvent = emKeyFlag_Set;
 				}
 			}
 		}
@@ -110,6 +117,10 @@ void vKeyScan(void)
  **/
 uint8_t u8KeyIsPressed(enumKeyDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= KEY_DEVICE_NUM)
+	{
+		return 0;
+	}
 	return (uint8_t)(arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emKeystatus == emKeystatusOn);
 }
 /**
@@ -122,8 +133,13 @@ uint8_t u8KeyIsPressed(enumKeyDeviceNumTdf emDeviceNum)
 uint8_t u8KeyGetPressEvent(enumKeyDeviceNumTdf emDeviceNum)
 {
 	uint8_t u8Event;
-	u8Event = arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8PressEvent;
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8PressEvent = 0;
+
+	if ((uint8_t)emDeviceNum >= KEY_DEVICE_NUM)
+	{
+		return 0;
+	}
+	u8Event = (uint8_t)arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emPressEvent;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emPressEvent = emKeyFlag_Reset;
 	return u8Event;
 }
 /** 
@@ -136,7 +152,12 @@ uint8_t u8KeyGetPressEvent(enumKeyDeviceNumTdf emDeviceNum)
 uint8_t u8KeyGetReleaseEvent(enumKeyDeviceNumTdf emDeviceNum)
 {
 	uint8_t u8Event;
-	u8Event = arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8ReleaseEvent;
-	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.u8ReleaseEvent = 0;
+
+	if ((uint8_t)emDeviceNum >= KEY_DEVICE_NUM)
+	{
+		return 0;
+	}
+	u8Event = (uint8_t)arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emReleaseEvent;
+	arrystKeyDeviceparam[emDeviceNum].KeyDynamicParame.emReleaseEvent = emKeyFlag_Reset;
 	return u8Event;
 }

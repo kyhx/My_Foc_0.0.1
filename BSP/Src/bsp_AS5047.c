@@ -1,14 +1,19 @@
 /**
- * @file					AS5047P_driver.c
- * @author 					可以航行
- * @version 				0.2
- * @date 					2026/9/1
- * @brief 					AS5047P驱动代码(普通阻塞模式 + DMA非阻塞模式)
- *
- **/
+  ******************************************************************************
+  * @file    bsp_AS5047.c
+  * @brief   AS5047BSP层源文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * 	本文件实现AS5047硬件抽象层，封装HAL库操作
+  *		AS5047P驱动代码(普通阻塞模式 + DMA非阻塞模式)
+  ******************************************************************************
+  */
 
-#include	"AS5047P_driver.h"
-#include	"top_config.h"
+#include	"bsp_AS5047.h"
+#include	"bsp_config.h"
 
 
 //【0】AS5047P设备。
@@ -85,7 +90,7 @@ static HAL_StatusTypeDef enSpiTransfer(enumAS5047PDeviceNumTdf emDeviceNum, uint
 
 	if (enStatus != HAL_OK)
 	{
-		pstDev->AS5047PDynamicParame.u8Error = 1;
+		pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
 	}
 	if (pu16Rx != NULL)
 	{
@@ -129,13 +134,24 @@ void vAS5047PDeviceInit(stAS5047PStaticParameTdf *pstInit, enumAS5047PDeviceNumT
 	{
 		pstDev->AS5047PStaticParame.u32MaxCount = pstInit->u32MaxCount;
 	}
+	/** 电机极对数(缺省1,即机械角=电角度) */
+	if (pstInit->u16PolePairs == 0)
+	{
+		pstDev->AS5047PStaticParame.u16PolePairs = 1;
+	}
+	else
+	{
+		pstDev->AS5047PStaticParame.u16PolePairs = pstInit->u16PolePairs;
+	}
 
 	/** 动态参数复位 */
 	pstDev->AS5047PDynamicParame.u16Angle     = 0;
 	pstDev->AS5047PDynamicParame.u32AngleRaw  = 0;
-	pstDev->AS5047PDynamicParame.u8Error      = 0;
-	pstDev->AS5047PDynamicParame.u8Busy       = 0;
-	pstDev->AS5047PDynamicParame.u8DmaDone    = 0;
+	pstDev->AS5047PDynamicParame.fAngleElecRad = 0.0f;
+	pstDev->AS5047PDynamicParame.fAngleElecDeg = 0.0f;
+	pstDev->AS5047PDynamicParame.emError      = emAS5047PFlag_Reset;
+	pstDev->AS5047PDynamicParame.emBusy       = emAS5047PFlag_Reset;
+	pstDev->AS5047PDynamicParame.emDmaDone    = emAS5047PFlag_Reset;
 	pstDev->AS5047PDynamicParame.u16TxBuf     = 0;
 	pstDev->AS5047PDynamicParame.u16RxBuf     = 0;
 }
@@ -176,7 +192,7 @@ uint16_t u16AS5047PReadRegister(enumAS5047PDeviceNumTdf emDeviceNum, uint16_t u1
 	if (enSpiTransfer(emDeviceNum, u16Cmd, &u16Rx1) != HAL_OK)
 	{
 		vSpiCsHigh(emDeviceNum);
-		pstDev->AS5047PDynamicParame.u8Error = 1;
+		pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
 		/** 传输失败: 返回缓存角度, 避免突变 */
 		if (u16RegAddr == SPI_AS5047P_REG_ANGLE)
 		{
@@ -191,7 +207,7 @@ uint16_t u16AS5047PReadRegister(enumAS5047PDeviceNumTdf emDeviceNum, uint16_t u1
 	if (enSpiTransfer(emDeviceNum, u16Cmd, &u16Rx2) != HAL_OK)
 	{
 		vSpiCsHigh(emDeviceNum);
-		pstDev->AS5047PDynamicParame.u8Error = 1;
+		pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
 		if (u16RegAddr == SPI_AS5047P_REG_ANGLE)
 		{
 			return pstDev->AS5047PDynamicParame.u16Angle;
@@ -221,7 +237,7 @@ uint16_t u16AS5047PReadRegister(enumAS5047PDeviceNumTdf emDeviceNum, uint16_t u1
 	/** 更新错误标志 */
 	if (u8Error)
 	{
-		pstDev->AS5047PDynamicParame.u8Error = 1;
+		pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
 	}
 
 	return u16Data;
@@ -251,7 +267,7 @@ void vAS5047PReadAngleDMA(enumAS5047PDeviceNumTdf emDeviceNum)
 	uint16_t 					u16Cmd;
 
 	/** 已有传输进行中,跳过本次 */
-	if (pstDev->AS5047PDynamicParame.u8Busy != 0)
+	if (pstDev->AS5047PDynamicParame.emBusy != emAS5047PFlag_Reset)
 	{
 		return;
 	}
@@ -260,10 +276,10 @@ void vAS5047PReadAngleDMA(enumAS5047PDeviceNumTdf emDeviceNum)
 	u16Cmd = (uint16_t)(SPI_AS5047P_READ_BIT | (SPI_AS5047P_REG_ANGLE & SPI_AS5047P_ADDR_MASK));
 	u16Cmd = u16SpiCalcEvenParity(u16Cmd);
 
-	pstDev->AS5047PDynamicParame.u16TxBuf  = u16Cmd;
-	pstDev->AS5047PDynamicParame.u16RxBuf  = 0;
-	pstDev->AS5047PDynamicParame.u8DmaDone = 0;
-	pstDev->AS5047PDynamicParame.u8Busy    = 1;
+	pstDev->AS5047PDynamicParame.u16TxBuf   = u16Cmd;
+	pstDev->AS5047PDynamicParame.u16RxBuf   = 0;
+	pstDev->AS5047PDynamicParame.emDmaDone  = emAS5047PFlag_Reset;
+	pstDev->AS5047PDynamicParame.emBusy     = emAS5047PFlag_Set;
 
 	/** 拉低CS,启动DMA单帧收发(16位) */
 	vSpiCsLow(emDeviceNum);
@@ -272,8 +288,8 @@ void vAS5047PReadAngleDMA(enumAS5047PDeviceNumTdf emDeviceNum)
 									(uint8_t *)&pstDev->AS5047PDynamicParame.u16RxBuf, 1) != HAL_OK)
 	{
 		vSpiCsHigh(emDeviceNum);
-		pstDev->AS5047PDynamicParame.u8Busy  = 0;
-		pstDev->AS5047PDynamicParame.u8Error = 1;
+		pstDev->AS5047PDynamicParame.emBusy  = emAS5047PFlag_Reset;
+		pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
 	}
 }
 /**
@@ -285,29 +301,35 @@ void vAS5047PReadAngleDMA(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emAS5047PDeviceNum0];
+	enumAS5047PDeviceNumTdf 	emDev;
+	stAS5047PDeviceParameTdf 	*pstDev;
 	uint16_t 					u16Rx;
 
-	/** 仅处理本驱动使用的SPI句柄 */
-	if (hspi != pstDev->AS5047PStaticParame.pstSpiHandle)
+	/** 遍历所有设备,按 SPI 句柄匹配,支持多实例 */
+	for (emDev = (enumAS5047PDeviceNumTdf)0; (uint8_t)emDev < AS5047P_DEVICE_NUM; emDev = (enumAS5047PDeviceNumTdf)((uint8_t)emDev + 1u))
 	{
-		return;
+		pstDev = &arrystAS5047PDeviceparam[emDev];
+		if (hspi != pstDev->AS5047PStaticParame.pstSpiHandle)
+		{
+			continue;
+		}
+
+		/** 传输完成,释放片选 */
+		vSpiCsHigh(emDev);
+
+		/** 解析DMA接收到的返回帧 */
+		u16Rx = pstDev->AS5047PDynamicParame.u16RxBuf;
+		if (u16Rx & SPI_AS5047P_ERRFLAG_BIT)
+		{
+			pstDev->AS5047PDynamicParame.emError = emAS5047PFlag_Set;
+		}
+		pstDev->AS5047PDynamicParame.u16Angle    = u16Rx & SPI_AS5047P_ANGLE_MASK;
+		pstDev->AS5047PDynamicParame.u32AngleRaw = u16Rx;
+
+		pstDev->AS5047PDynamicParame.emBusy    = emAS5047PFlag_Reset;
+		pstDev->AS5047PDynamicParame.emDmaDone = emAS5047PFlag_Set;
+		break;
 	}
-
-	/** 传输完成,释放片选 */
-	vSpiCsHigh(emAS5047PDeviceNum0);
-
-	/** 解析DMA接收到的返回帧 */
-	u16Rx = pstDev->AS5047PDynamicParame.u16RxBuf;
-	if (u16Rx & SPI_AS5047P_ERRFLAG_BIT)
-	{
-		pstDev->AS5047PDynamicParame.u8Error = 1;
-	}
-	pstDev->AS5047PDynamicParame.u16Angle    = u16Rx & SPI_AS5047P_ANGLE_MASK;
-	pstDev->AS5047PDynamicParame.u32AngleRaw = u16Rx;
-
-	pstDev->AS5047PDynamicParame.u8Busy    = 0;
-	pstDev->AS5047PDynamicParame.u8DmaDone = 1;
 }
 /**
  * 	@brief 										DMA任务(主循环周期调用)
@@ -320,7 +342,7 @@ void vAS5047PDmaTask(enumAS5047PDeviceNumTdf emDeviceNum)
 {
 	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emDeviceNum];
 
-	if (pstDev->AS5047PDynamicParame.u8Busy == 0)
+	if (pstDev->AS5047PDynamicParame.emBusy == emAS5047PFlag_Reset)
 	{
 		vAS5047PReadAngleDMA(emDeviceNum);
 	}
@@ -335,6 +357,9 @@ void vAS5047PDmaTask(enumAS5047PDeviceNumTdf emDeviceNum)
 void vAS5047PUpdate(enumAS5047PDeviceNumTdf emDeviceNum)
 {
 	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emDeviceNum];
+	uint16_t 					u16Angle;
+	float 						fAngleRad;
+	float 						fAngleElec;
 
 	if (pstDev->AS5047PStaticParame.emTransferMode == emAS5047PTransferMode_DMA)
 	{
@@ -342,9 +367,18 @@ void vAS5047PUpdate(enumAS5047PDeviceNumTdf emDeviceNum)
 	}
 	else
 	{
-		uint16_t u16Angle = u16AS5047PReadRegister(emDeviceNum, SPI_AS5047P_REG_ANGLE);
+		u16Angle = u16AS5047PReadRegister(emDeviceNum, SPI_AS5047P_REG_ANGLE);
 		pstDev->AS5047PDynamicParame.u16Angle = u16Angle;
 	}
+
+	/** 电角度计算: 电角度 = 机械角 × 极对数, 对 2π 取模保持 0~2π */
+	fAngleRad  = (float)((float)(pstDev->AS5047PDynamicParame.u16Angle & SPI_AS5047P_ANGLE_MASK)
+					* 6.2831855f / (float)pstDev->AS5047PStaticParame.u32MaxCount);
+	fAngleElec = fAngleRad * (float)pstDev->AS5047PStaticParame.u16PolePairs;
+	fAngleElec = fAngleElec - 6.2831855f * (float)((int32_t)(fAngleElec / 6.2831855f));
+
+	pstDev->AS5047PDynamicParame.fAngleElecRad = fAngleElec;
+	pstDev->AS5047PDynamicParame.fAngleElecDeg = fAngleElec * 57.2957795f;
 }
 /**
  * 	@brief 										获取最近一次读取的角度
@@ -355,6 +389,10 @@ void vAS5047PUpdate(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 uint16_t u16AS5047PGetAngle(enumAS5047PDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0;
+	}
 	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.u16Angle;
 }
 /**
@@ -366,10 +404,49 @@ uint16_t u16AS5047PGetAngle(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 float fAS5047PGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum)
 {
-	uint16_t u16Angle = arrystAS5047PDeviceparam[emDeviceNum].
-	AS5047PDynamicParame.u16Angle & SPI_AS5047P_ANGLE_MASK;
+	stAS5047PDeviceParameTdf 	*pstDev;
+	uint16_t u16Angle;
 
-	return (float)((float)u16Angle * 6.2831855f / 16384.0f);
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0.0f;
+	}
+	pstDev = &arrystAS5047PDeviceparam[emDeviceNum];
+	u16Angle = pstDev->AS5047PDynamicParame.u16Angle & SPI_AS5047P_ANGLE_MASK;
+
+	return (float)((float)u16Angle * 6.2831855f / (float)pstDev->AS5047PStaticParame.u32MaxCount);
+}
+/**
+ * 	@brief 										获取电角度(弧度)
+ * 	@param		emDeviceNum		 	AS5047P设备号
+ * 	@retval										电角度值(弧度,0~2π)
+ * 	@note											基于机械角×极对数换算,由vAS5047PUpdate周期更新。
+ * 											未更新时返回0。
+ *
+ * */
+float fAS5047PGetAngleElecRad(enumAS5047PDeviceNumTdf emDeviceNum)
+{
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0.0f;
+	}
+	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.fAngleElecRad;
+}
+/**
+ * 	@brief 										获取电角度(度)
+ * 	@param		emDeviceNum		 	AS5047P设备号
+ * 	@retval										电角度值(度,0~360)
+ * 	@note											基于机械角×极对数换算,由vAS5047PUpdate周期更新。
+ * 											未更新时返回0。
+ *
+ * */
+float fAS5047PGetAngleElecDeg(enumAS5047PDeviceNumTdf emDeviceNum)
+{
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0.0f;
+	}
+	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.fAngleElecDeg;
 }
 /**
  * 	@brief 										获取错误标志
@@ -379,7 +456,11 @@ float fAS5047PGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 uint8_t u8AS5047PGetError(enumAS5047PDeviceNumTdf emDeviceNum)
 {
-	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.u8Error;
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0;
+	}
+	return (uint8_t)arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.emError;
 }
 /**
  * 	@brief 										获取DMA传输忙标志
@@ -389,7 +470,11 @@ uint8_t u8AS5047PGetError(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 uint8_t u8AS5047PIsBusy(enumAS5047PDeviceNumTdf emDeviceNum)
 {
-	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.u8Busy;
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0;
+	}
+	return (uint8_t)arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.emBusy;
 }
 /*******************************************************ENC***********************************************************/
 /**
@@ -413,7 +498,7 @@ void vAS5047PEncDeviceInit(stAS5047PENCStaticParameTdf *pstInit, enumAS5047PDevi
 	pstDev->AS5047PENCDynamicParame.i16Delta    = 0;
 	pstDev->AS5047PENCDynamicParame.fAngleRad   = 0.0f;
 	pstDev->AS5047PENCDynamicParame.fAngleDeg   = 0.0f;
-	pstDev->AS5047PENCDynamicParame.u8Started   = 0;
+	pstDev->AS5047PENCDynamicParame.emStarted   = emAS5047PFlag_Reset;
 }
 /**
  * 	@brief 										启动正交编码器接口
@@ -427,14 +512,14 @@ void vAS5047PEncStart(enumAS5047PDeviceNumTdf emDeviceNum)
 	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emDeviceNum];
 	TIM_HandleTypeDef 			*pstTim = pstDev->AS5047PENCStaticParame.pstTimHandle;
 
-	if (pstDev->AS5047PENCDynamicParame.u8Started != 0)
+	if (pstDev->AS5047PENCDynamicParame.emStarted != emAS5047PFlag_Reset)
 	{
 		return;
 	}
 
 	HAL_TIM_Encoder_Start(pstTim, TIM_CHANNEL_1);
 
-	pstDev->AS5047PENCDynamicParame.u8Started   = 1;
+	pstDev->AS5047PENCDynamicParame.emStarted   = emAS5047PFlag_Set;
 	pstDev->AS5047PENCDynamicParame.u16RawCount = (uint16_t)__HAL_TIM_GET_COUNTER(pstTim);
 	pstDev->AS5047PENCDynamicParame.i32Count    = 0;
 }
@@ -448,7 +533,7 @@ void vAS5047PEncStop(enumAS5047PDeviceNumTdf emDeviceNum)
 	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emDeviceNum];
 
 	HAL_TIM_Encoder_Stop(pstDev->AS5047PENCStaticParame.pstTimHandle, TIM_CHANNEL_1);
-	pstDev->AS5047PENCDynamicParame.u8Started = 0;
+	pstDev->AS5047PENCDynamicParame.emStarted = emAS5047PFlag_Reset;
 }
 /**
  * 	@brief 										更新正交编码器角度
@@ -469,7 +554,7 @@ void vAS5047PEncUpdate(enumAS5047PDeviceNumTdf emDeviceNum)
 	float 						fAngle;
 	uint32_t 					u32Cpr = pstDev->AS5047PENCStaticParame.u32Cpr;
 
-	if (pstDev->AS5047PENCDynamicParame.u8Started == 0)
+	if (pstDev->AS5047PENCDynamicParame.emStarted == emAS5047PFlag_Reset)
 	{
 		return;
 	}
@@ -512,6 +597,10 @@ void vAS5047PEncUpdate(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 int32_t i32AS5047PEncGetCount(enumAS5047PDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0;
+	}
 	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PENCDynamicParame.i32Count;
 }
 /**
@@ -522,6 +611,10 @@ int32_t i32AS5047PEncGetCount(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 int16_t i16AS5047PEncGetDelta(enumAS5047PDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0;
+	}
 	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PENCDynamicParame.i16Delta;
 }
 /**
@@ -532,6 +625,10 @@ int16_t i16AS5047PEncGetDelta(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 float fAS5047PEncGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0.0f;
+	}
 	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PENCDynamicParame.fAngleRad;
 }
 /**
@@ -542,6 +639,10 @@ float fAS5047PEncGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum)
  * */
 float fAS5047PEncGetAngleDeg(enumAS5047PDeviceNumTdf emDeviceNum)
 {
+	if ((uint8_t)emDeviceNum >= AS5047P_DEVICE_NUM)
+	{
+		return 0.0f;
+	}
 	return arrystAS5047PDeviceparam[emDeviceNum].AS5047PENCDynamicParame.fAngleDeg;
 }
 

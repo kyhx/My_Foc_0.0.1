@@ -1,16 +1,20 @@
 /**
- * @file					key_driver.h
- * @author 					可以航行
- * @version 				0.1
- * @date 					2026/8/20
- * @brief 					Key驱动，使用HAL库
- *
- **/
+  ******************************************************************************
+  * @file    bsp_key.h
+  * @brief   KeyBSP层头文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * 本文件提供Key硬件抽象层接口，供中间件和应用层调用
+  ******************************************************************************
+  */
+  
+#ifndef __BSP_KEY__H
+#define __BSP_KEY__H
 
-#ifndef __KEY_DRIVER_H
-#define __KEY_DRIVER_H
-
-#include "top_config.h"
+#include "bsp_config.h"
 
 #include "main.h"
 
@@ -55,6 +59,19 @@ typedef enum
 }
 enumKeyOnLevelTdf;
 
+/**	@brief 				Key标志电平枚举
+ * 	@note
+ *
+ **/
+typedef enum   
+{
+
+	emKeyFlag_Reset		 = 0,	//标志复位(0)
+	emKeyFlag_Set,				//标志置位(1)
+	
+}
+enumKeyFlagTdf;
+
 /**	@brief 				Key静态参数结构体定义
  * 	@note
  *
@@ -75,11 +92,11 @@ stKeyStaticParameTdf;
  **/
 typedef struct  
 {
-	enumKeystatusTdf			emKeystatus;				//Key当前稳定状态(消抖后)
-	uint8_t							u8DebouncePending;		//消抖等待标志
-	uint32_t						u32DebounceTick;		//消抖计时起点(ms)
-	uint8_t							u8PressEvent;			//按下事件标志
-	uint8_t							u8ReleaseEvent;			//释放事件标志
+	enumKeystatusTdf			emKeystatus;			//Key当前稳定状态(消抖后)
+	enumKeyFlagTdf				emDebouncePending;	//消抖等待标志
+	uint32_t					u32DebounceTick;		//消抖计时起点(ms)
+	enumKeyFlagTdf				emPressEvent;			//按下事件标志
+	enumKeyFlagTdf				emReleaseEvent;			//释放事件标志
 	
 }
 stKeyDynamicParameTdf;

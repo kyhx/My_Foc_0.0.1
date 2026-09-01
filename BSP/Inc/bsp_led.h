@@ -1,15 +1,20 @@
-/*
- * @file					led_driver.h
- * @author 				可以航行
- * @version 			0.1
- * @data 					2026/8/19
- * @brief 				led驱动，使用HAL库
- * */
+/**
+  ******************************************************************************
+  * @file    bsp_led.h
+  * @brief   LEDBSP层头文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * 本文件提供LED硬件抽象层接口，供中间件和应用层调用
+  ******************************************************************************
+  */
+  
+#ifndef __BSP_LED__H
+#define __BSP_LED__H
 
-#ifndef __LED_DRIVER_H
-#define __LED_DRIVER_H
-
-#include "top_config.h"
+#include "bsp_config.h"
 
 #include "main.h"
 

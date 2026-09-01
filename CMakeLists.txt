@@ -45,11 +45,16 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
-    BSP/Src/key_driver.c
-    BSP/Src/led_driver.c
-    BSP/Src/AS5047P_driver.c
-    BSP/Src/DRV8313_driver.c
+    BSP/Src/bsp_key.c
+    BSP/Src/bsp_led.c
+    BSP/Src/bsp_AS5047.c
+    BSP/Src/bsp_DRV8313.c
+    BSP/Src/bsp_uart.c
     App/Src/user.c
+    App/Src/oscilloscope.c
+    Mid/Src/vofa.c
+    Mid/Src/comm.c
+    Mid/Src/transfer.c
 
 )
 
@@ -57,6 +62,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     BSP/Inc
+    Mid/Inc
     App/Inc
 )
 
@@ -73,4 +79,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    m
 )

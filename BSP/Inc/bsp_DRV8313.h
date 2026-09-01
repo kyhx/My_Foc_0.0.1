@@ -1,27 +1,30 @@
 /**
- * @file					DRV8313_driver.h
- * @author 					可以航行
- * @version 				0.3
- * @date 					2026/9/1
- * @brief 					DRV8313三相无刷驱动,HAL库,STM32G431
- *
- *  - PB11读取DRV8313错误状态(FAULT,低有效)。
- *  - PA11控制DRV8313输出使能(高有效)。
- *  - ADC1 CH1~CH3经运放采样三相电流(10mΩ采样电阻,增益16.5,参考1.65V),
- *    由注入组在PWM峰/谷(TIM1 TRGO)同步触发,用于电流环。
- *  - ADC1 CH4采样母线电压,由普通组+DMA循环传输读取。
- *
- **/
+  ******************************************************************************
+  * @file    bsp_DRV8313.h
+  * @brief   DRV8313BSP层头文件
+  * @author  可以航行
+  * @version V1.0.0
+  * @date    2026-09-02
+  ******************************************************************************
+  * @attention
+  * 本文件提供DRV8313硬件抽象层接口，供中间件和应用层调用
+  *		- PB11读取DRV8313错误状态(FAULT,低有效)。
+  *  	- PA11控制DRV8313输出使能(高有效)。
+  *  	- ADC1 CH1~CH3经运放采样三相电流(10mΩ采样电阻,增益16.5,参考1.65V),
+  *    由注入组在PWM峰/谷(TIM1 TRGO)同步触发,用于电流环。
+  *  	- ADC1 CH4采样母线电压,由普通组+DMA循环传输读取。
+  ******************************************************************************
+  */
+  
+#ifndef __BSP_DRV8313__H
+#define __BSP_DRV8313__H
 
-#ifndef __DRV8313_DRIVER_H
-#define __DRV8313_DRIVER_H
-
-#include "top_config.h"
+#include "bsp_config.h"
 #include "main.h"
 
 /**	@brief 			DRV8313常量
  * 	@note
- * */
+ **/
 #define DRV8313_REGULAR_CH_NUM		4	//普通组转换通道数(CH1~CH4)
 #define DRV8313_BUSV_DMA_IDX		3	//母线电压(CH4)在普通组DMA缓冲中的下标(rank4)
 #define DRV8313_ADC_MAX				4095	//ADC 12位满量程
@@ -61,10 +64,33 @@ typedef enum
 }
 enumErrorStatusTdf;
 
+/**	@brief 				DRV8313，标志电平枚举
+ * 	@note
+ *
+ **/
+typedef enum
+{
+	emDRV8313Flag_Reset = 0,	//标志复位(0)
+	emDRV8313Flag_Set,			//标志置位(1)
+}
+enumDRV8313FlagTdf;
+
+/**	@brief 				DRV8313，电流零偏校准状态枚举
+ * 	@note
+ *
+ **/
+typedef enum
+{
+	emDRV8313Cal_NotStart = 0,	//未开始
+	emDRV8313Cal_InProgress,	//校准中
+	emDRV8313Cal_Done,			//完成
+}
+enumDRV8313CalStateTdf;
+
 /**	@brief 				DRV8313静态参数结构体定义
  * 	@note
  *
- * */
+ **/
 typedef struct
 {
 	ADC_HandleTypeDef 			*pstADCHandle;		//HAL库ADC句柄(hadc1)
@@ -78,7 +104,7 @@ stDRV8313StaticParameTdf;
 /**	@brief 				DRV8313动态参数结构体定义
  * 	@note
  *
- * */
+ **/
 typedef struct
 {
 	uint16_t 					au16CurrentRaw[3];	//三相电流原始值(注入组JLDR1~3: Ia/Ib/Ic)
@@ -87,9 +113,9 @@ typedef struct
 	float 						fBusVoltage;		//母线电压(V)
 	enumPwnenStatusTdf 			emPwnen;			//使能状态
 	enumErrorStatusTdf 			emError;			//错误状态
-	volatile uint8_t 			u8OcFlag;			//过流标志(任一相|I|超限)
-	volatile uint8_t 			u8InjDone;			//注入组转换完成标志(中断方式)
-	volatile uint8_t 			u8CalState;			//电流零偏校准状态: 0=未开始 1=校准中 2=完成
+	volatile enumDRV8313FlagTdf 	emOcFlag;			//过流标志(任一相|I|超限)
+	volatile enumDRV8313FlagTdf 	emInjDone;			//注入组转换完成标志(中断方式)
+	volatile enumDRV8313CalStateTdf emCalState;		//电流零偏校准状态
 	uint32_t 					u32CalCount;		//校准采样计数
 	float 						fCalOffsetA[3];		//三相电流零偏补偿(A)
 }
@@ -135,6 +161,7 @@ void 	vDRV8313UpdateBusVoltage(enumDRV8313DeviceNumTdf emDeviceNum);	//读取母
 float 	fDRV8313GetCurrentA(enumDRV8313DeviceNumTdf emDeviceNum, uint8_t u8Phase);	//0=Ia 1=Ib 2=Ic
 float 	fDRV8313GetBusVoltage(enumDRV8313DeviceNumTdf emDeviceNum);
 uint8_t u8DRV8313GetOcFlag(enumDRV8313DeviceNumTdf emDeviceNum);
+void 	vDRV8313ClearOcFlag(enumDRV8313DeviceNumTdf emDeviceNum);		//清除过流标志(锁存复位)
 
 #endif
 
