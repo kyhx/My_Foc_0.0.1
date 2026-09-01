@@ -12,7 +12,6 @@ void vKeyInit(void);
 
 void vUserInit(void);
 
-<<<<<<< HEAD
 void vAS5047PInit(void);
 
 void vDRV8313Init(void);
@@ -48,8 +47,4 @@ float fFocGetThetaElec(void);    /** 获取转子电角度(rad) */
 void  vFocSetReportEnable(uint8_t bEnable);  /** 开启/关闭连续 vofa 上报 */
 uint8_t u8FocGetReportEnable(void);          /** 查询连续上报使能状态 */
 
-=======
-void vUserExecute(void);
-
->>>>>>> 13998c3cc676588ccb947765ce013261908544a0
 #endif
