@@ -476,7 +476,8 @@ uint8_t u8AS5047PIsBusy(enumAS5047PDeviceNumTdf emDeviceNum)
 	}
 	return (uint8_t)arrystAS5047PDeviceparam[emDeviceNum].AS5047PDynamicParame.emBusy;
 }
-/*******************************************************ENC***********************************************************/
+/*******************************************************ENC编码器模式*****************************************************/
+
 /**
  * @brief 										正交编码器(ABI)接口初始化
  * @param		pstInit					 	编码器静态参数结构体地址
@@ -485,6 +486,7 @@ uint8_t u8AS5047PIsBusy(enumAS5047PDeviceNumTdf emDeviceNum)
  * 											u32Cpr为每圈计数(ABI倍频后)。
  *
  * */
+
 void vAS5047PEncDeviceInit(stAS5047PENCStaticParameTdf *pstInit, enumAS5047PDeviceNumTdf emDeviceNum)
 {
 	stAS5047PDeviceParameTdf 	*pstDev = &arrystAS5047PDeviceparam[emDeviceNum];

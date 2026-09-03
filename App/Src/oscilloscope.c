@@ -17,6 +17,8 @@
 #include "vofa.h"
 #include "bsp_DRV8313.h"
 #include "bsp_AS5047.h"
+#include "bsp_pwm.h"
+#include "motor.h"
 #include "top_config.h"
 
 #define OSC_TWO_PI 		6.283185307f	//2π
@@ -51,7 +53,7 @@ static void vOScUpdateSpeed(void)
  * */
 void OSc_Init(void)
 {
-	VOFA_Init(&stOSc, VOFA_TX_BLOCKING);
+	VOFA_Init(&stOSc, VOFA_TX_DMA);
 	VOFA_ConfigChannels(&stOSc, OSC_CHANNEL_NUM);
 
 	/* 测速基准初始化 */
@@ -72,19 +74,28 @@ void OSc_ReportOnce(void)
 	float fIb   = fDRV8313GetCurrentA(DRV8313, 1);	//B相电流(A)
 	float fIc   = fDRV8313GetCurrentA(DRV8313, 2);	//C相电流(A)
 	float fUdc  = fDRV8313GetBusVoltage(DRV8313);	//母线电压(V)
-	float fTheta= fAS5047PGetAngleElecRad(AS5047P);	//电角度(rad)
-	float fAbi  = fAS5047PEncGetAngleRad(AS5047P);	//ABI单圈角度(rad)
+	float fTheta= fMotorGetElecAngleRad(MOTOR);		//电角度(rad,按所选来源: 编码器/给定/自动生成)
+	//float fAbi  = fAS5047PEncGetAngleRad(AS5047P);	//ABI单圈角度(rad)
+	float fThetare  = fAS5047PGetAngleElecRad(AS5047P);
+
+	/* PWM 比较值(CCR,原始占空比计数,便于核对A/B/C三相PWM是否同步变化) */
+	float fCcr1 = (float)u32PwmGetCompare(PWM, emPwmChannel1);	//CCR1(A相)
+	float fCcr2 = (float)u32PwmGetCompare(PWM, emPwmChannel2);	//CCR2(B相)
+	float fCcr3 = (float)u32PwmGetCompare(PWM, emPwmChannel3);	//CCR3(C相)
 
 	/* 速度 = ABI计数差分 */
 	vOScUpdateSpeed();
 
-	VOFA_SetData(&stOSc, 0, fIa);
+	VOFA_SetData(&stOSc, 0, fUdc);
 	VOFA_SetData(&stOSc, 1, fIb);
 	VOFA_SetData(&stOSc, 2, fIc);
-	VOFA_SetData(&stOSc, 3, fUdc);
+	VOFA_SetData(&stOSc, 3, fIa);
 	VOFA_SetData(&stOSc, 4, fTheta);
 	VOFA_SetData(&stOSc, 5, fSpeedRadS);
-	VOFA_SetData(&stOSc, 6, fAbi);
+	VOFA_SetData(&stOSc, 6, fThetare);
+	VOFA_SetData(&stOSc, 7, fCcr1);
+	VOFA_SetData(&stOSc, 8, fCcr2);
+	VOFA_SetData(&stOSc, 9, fCcr3);
 
 	VOFA_Send(&stOSc);
 }

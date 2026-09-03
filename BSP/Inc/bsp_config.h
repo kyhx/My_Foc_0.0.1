@@ -11,7 +11,16 @@
 
 
 #include "main.h"
+#include "adc.h"
+#include "spi.h"
+#include "tim.h"
 
+#include "bsp_led.h"
+#include "bsp_key.h"
+#include "bsp_AS5047.h"
+#include "bsp_DRV8313.h"
+#include "bsp_pwm.h"
+#include "bsp_uart.h"
 
 //LED设备
 #define LED_DEVICE_NUM 		2		
@@ -29,6 +38,9 @@
 #define UART_DEFAULT_TIMEOUT 		100		//普通模式发送/接收默认超时(ms)
 #define UART_DEVICE_NUM 			1		//UART设备数量
 
+//PWM设备
+#define PWM_DEVICE_NUM 			1		//PWM设备数量
+#define PWM 		emPwmDeviceNum0		//PWM设备0
 
 
 //DRV8313设备
@@ -40,6 +52,8 @@
 #define ADC_CUR_AMP 			16.5f		//LM324放大倍数
 #define ADC_CUR_GAIN 			(1.0f/(ADC_RSENSE*ADC_CUR_AMP))	//电流增益(A/V) = 1/(0.01×16.5) ≈ 6.0606
 #define ADC_UDC_GAIN 			23.0f		//母线电压增益(220K/10K=23)
+//电机参数
+#define MOTOR_POLE_PAIRS 		7		//电机极对数(机械角→电角度)
 
 //电流采样有效性与保护参数
 #define ADC_RAW_MIN 			124		//LM324输出有效下限(raw): 0.1V≈124LSB, 低于此判饱和/断线
@@ -52,6 +66,21 @@
 #define AS5047P 		emAS5047PDeviceNum0		//AS5047P设备0
 #define AS5047P_ENC_CPR 			1024		//编码器每圈计数
 #define AS5047P_SPEED_WINDOW_MS 		20		//测速窗口(ms): 累计该窗口内增量再算速度,消除主循环快慢影响
+
+
+
+void vLedInit(void);
+
+void vKeyInit(void);
+
+void vPwmInit(void);
+
+void vUartInit(void);
+
+void vAS5047PInit(void);
+
+void vDRV8313Init(void);
+
 
 
 #endif

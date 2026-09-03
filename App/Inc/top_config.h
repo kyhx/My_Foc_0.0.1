@@ -23,6 +23,7 @@
 #define KEY_DEBOUNCE_TIME 		20		//按键消抖时间(ms)
 #define KEY_LONG_PRESS_MS 		800		//长按判定时间(ms): 短按切启停,长按调占空比
 #define KEY_ADJ_INTERVAL_MS 		150		//长按调占空比步进间隔(ms)
+#define KEY_SPEED_STEP_RAD_S 		6.283f	//长按调速步进(rad/s)
 #define KEY 			emKeyDeviceNum0		//KEY按键
 
 //Comm设备
@@ -52,6 +53,10 @@
 #define AS5047P_ENC_CPR 			1024		//编码器每圈计数
 #define AS5047P_SPEED_WINDOW_MS 		20		//测速窗口(ms): 累计该窗口内增量再算速度,消除主循环快慢影响
 
+//MOTOR设备
+#define MOTOR_DEVICE_NUM 		1		//MOTOR设备数量
+#define MOTOR 		emMotorDeviceNum0		//MOTOR设备0
+
 
 //电机参数
 #define MOTOR_POLE_PAIRS 		7		//电机极对数(机械角→电角度)
@@ -69,7 +74,9 @@
 #define FOC_OL_ENABLE 			1		//1=上电后自动零点对齐并开环运行; 0=仅做电流/编码器采样
 #define ZA_DUTY_PERMILLE 		300		//零点对齐注入占空比(千分比0~1000), 需防止过流
 #define ZA_LOCK_MS 				800		//零点对齐转子锁定稳定等待时长(ms)
+#define ZA_CAL_TIMEOUT_MS 		3000	//电流零偏校准超时(ms): 超时未完成则初始化报错(Error),避免卡死
 #define OL_UD_V 				0.0f	//开环d轴电压指令(V)
 #define OL_UQ_V 				0.5f	//开环q轴电压指令(V)
+#define OL_ELEC_SPEED_RAD_S 		15.708f	//开环自动生成电角度速度(rad/s)≈2.5电转/秒
 
 #endif

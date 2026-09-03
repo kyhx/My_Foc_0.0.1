@@ -8,7 +8,7 @@
   ******************************************************************************
   * @attention
   * 周期采集多路实时信号并通过 VOFA+ JustFloat 协议上报,供上位机示波器波形显示。
-  * 通道: 0=Ia 1=Ib 2=Ic 3=Udc 4=电角度θ 5=转子速度 6=ABI角度
+  * 通道: 0=Udc 1=Ib 2=Ic 3=Ia 4=电角度θ 5=转子速度 6=θre 7=CCR1 8=CCR2 9=CCR3
   ******************************************************************************
   */
 
@@ -17,7 +17,7 @@
 
 #include "top_config.h"
 
-#define OSC_CHANNEL_NUM 		7		//示波器通道数(JustFloat)
+#define OSC_CHANNEL_NUM 		10		//示波器通道数(JustFloat)
 #define OSC_SAMPLE_PERIOD_MS 	10		//采样/上报周期(ms), 1ms≈1kHz
 
 /*	@brief 								示波器应用初始化

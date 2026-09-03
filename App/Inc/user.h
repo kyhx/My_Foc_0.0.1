@@ -6,19 +6,10 @@
 #include "main.h"
 
 
-void vLedInit(void);
-
-void vKeyInit(void);
-
-void vUserInit(void);
-
-void vAS5047PInit(void);
-
-void vDRV8313Init(void);
-
-void vUartInit(void);
-
+void vMotorSetup(void);
 void vUserExecute(void);
+void vUserInit(void);
+//void vKeyControlMotor(void);
 
 /* ==================== FOC 坐标变换与上报 ==================== */
 

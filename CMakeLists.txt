@@ -50,11 +50,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/Src/bsp_AS5047.c
     BSP/Src/bsp_DRV8313.c
     BSP/Src/bsp_uart.c
+    BSP/Src/bsp_pwm.c
+    BSP/Src/bsp_config.c
     App/Src/user.c
     App/Src/oscilloscope.c
     Mid/Src/vofa.c
     Mid/Src/comm.c
-    Mid/Src/transfer.c
+    Mid/Src/foc.c
+    Mid/Src/motor.c
 
 )
 
