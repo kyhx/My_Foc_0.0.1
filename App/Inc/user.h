@@ -2,6 +2,7 @@
 #define __USER_H
 
 #include "top_config.h"
+#include "motor.h"
 
 #include "main.h"
 
@@ -10,6 +11,28 @@ void vMotorSetup(void);
 void vUserExecute(void);
 void vUserInit(void);
 //void vKeyControlMotor(void);
+
+/* ==================== 电机运行控制(按键与串口共用) ==================== */
+/**
+  * @brief  设置电机启动来源(auto/manual/encoder), 供串口选择后启动
+  */
+void vUserMotorSetSource(enumMotorAngleSrcTdf emSrc);
+enumMotorAngleSrcTdf emUserMotorGetSource(void);
+
+/**
+  * @brief  按当前选定来源启动电机(含编码器首次转子对齐+捕获零位)
+  * @retval 0=已启动/成功 1=故障锁存被拒 2=电流校准未完成被拒
+  */
+uint8_t u8UserMotorStart(void);
+
+/**
+  * @brief  停止电机并关断桥臂
+  */
+void vUserMotorStop(void);
+
+uint8_t u8UserMotorIsRunning(void);
+uint8_t u8UserMotorIsAligning(void);
+uint8_t u8UserMotorGetFault(void);
 
 /* ==================== FOC 坐标变换与上报 ==================== */
 

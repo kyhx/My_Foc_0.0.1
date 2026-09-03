@@ -31,9 +31,9 @@
 #define KEY_DEVICE_NUM 		1		
 #define KEY_DEBOUNCE_TIME 		20		//按键消抖时间(ms)
 #define KEY_LONG_PRESS_MS 		800		//长按判定时间(ms): 短按切启停,长按调占空比
-#define KEY_ADJ_INTERVAL_MS 		150		//长按调占空比步进间隔(ms)
 #define KEY 			emKeyDeviceNum0		//KEY按键
-
+#define KEY_REPEAT_TIME         200         // 连发间隔 (ms)
+#define KEY_REPEAT_DELAY        500         // 连发延迟 (ms)
 // 超时时间（ms）
 #define UART_DEFAULT_TIMEOUT 		100		//普通模式发送/接收默认超时(ms)
 #define UART_DEVICE_NUM 			1		//UART设备数量

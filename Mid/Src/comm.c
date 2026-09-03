@@ -23,6 +23,8 @@
 #include "app_comm.h"
 #include "bsp_uart.h"
 #include "bsp_DRV8313.h"
+#include "motor.h"
+#include "app_motor.h"
 #include "user.h"
 #include "vofa.h"
 #include "top_config.h"
@@ -58,57 +60,115 @@ static void vCommProcessLine(char *pLine)
 	if (strcmp(pLine, "help") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"cmds: help angle current report report on|off vd <v> vq <v> start stop\r\n");
+			"cmds: help angle current vd <v> vq <v> freq <hz> iq <A> id <A> foc src auto|manual|encoder mode open|current start stop state\r\n");
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "angle") == 0)
 	{
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "theta_elec=%.4f rad\r\n", fFocGetThetaElec());
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "theta_elec=%.4f rad src=%d\r\n",
+				fMotorGetElecAngleRad(), (int)emMotorGetAngleSource());
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "current") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Ia=%.3f Ib=%.3f Ic=%.3f A\r\n",
-				fFocGetCurrentA(0), fFocGetCurrentA(1), fFocGetCurrentA(2));
+				fDRV8313GetCurrentA(DRV8313, 0),
+				fDRV8313GetCurrentA(DRV8313, 1),
+				fDRV8313GetCurrentA(DRV8313, 2));
 		vCommReply(acTxBuf);
-	}
-	else if (strcmp(pLine, "report") == 0)
-	{
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "report=%s\r\n",
-				u8FocGetReportEnable() ? "on" : "off");
-		vCommReply(acTxBuf);
-	}
-	else if (strcmp(pLine, "report on") == 0)
-	{
-		vFocSetReportEnable(1);
-		vCommReply("report on\r\n");
-	}
-	else if (strcmp(pLine, "report off") == 0)
-	{
-		vFocSetReportEnable(0);
-		vCommReply("report off\r\n");
 	}
 	else if (strncmp(pLine, "vd ", 3) == 0)
 	{
-		vFocSetVd((float)strtof(pLine + 3, NULL));
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vd=%.3f V\r\n", fFocGetVd());
+		vMotorOpenLoopSetVd((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vd=%.3f V\r\n", fMotorGetOpenLoopVd());
 		vCommReply(acTxBuf);
 	}
 	else if (strncmp(pLine, "vq ", 3) == 0)
 	{
-		vFocSetVq((float)strtof(pLine + 3, NULL));
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vq=%.3f V\r\n", fFocGetVq());
+		vMotorOpenLoopSetVq((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vq=%.3f V\r\n", fMotorGetOpenLoopVq());
 		vCommReply(acTxBuf);
+	}
+	else if (strncmp(pLine, "iq ", 3) == 0)
+	{
+		vAppMotorSetIqRef((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Iq_ref=%.3f A\r\n", fAppMotorGetIqRef());
+		vCommReply(acTxBuf);
+	}
+	else if (strncmp(pLine, "id ", 3) == 0)
+	{
+		vAppMotorSetIdRef((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Id_ref=%.3f A\r\n", fAppMotorGetIdRef());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "foc") == 0)
+	{
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
+			"mode=%d Id_ref=%.3f Iq_ref=%.3f Id=%.3f Iq=%.3f Vd=%.3f Vq=%.3f\r\n",
+			(int)emAppMotorGetMode(), fAppMotorGetIdRef(), fAppMotorGetIqRef(),
+			fAppMotorGetId(), fAppMotorGetIq(), fAppMotorGetVd(), fAppMotorGetVq());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "mode open") == 0)
+	{
+		vAppMotorSetMode(emAppMotorMode_OpenLoop);
+		vCommReply("mode open (开环)\r\n");
+	}
+	else if (strcmp(pLine, "mode current") == 0)
+	{
+		vAppMotorSetMode(emAppMotorMode_Current);
+		vCommReply("mode current (FOC电流闭环)\r\n");
+	}
+	else if (strncmp(pLine, "freq ", 5) == 0)
+	{
+		vMotorSetAutoFreqHz((float)strtof(pLine + 5, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "freq=%.3f Hz\r\n", fMotorGetAutoFreqHz());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "src auto") == 0)
+	{
+		vUserMotorSetSource(emMotorAngleSrc_Auto);
+		vCommReply("src auto\r\n");
+	}
+	else if (strcmp(pLine, "src manual") == 0)
+	{
+		vUserMotorSetSource(emMotorAngleSrc_Manual);
+		vCommReply("src manual\r\n");
+	}
+	else if (strcmp(pLine, "src encoder") == 0)
+	{
+		vUserMotorSetSource(emMotorAngleSrc_Encoder);
+		vCommReply("src encoder\r\n");
 	}
 	else if (strcmp(pLine, "start") == 0)
 	{
-		vDRV8313Enable(DRV8313);
-		vCommReply("motor start\r\n");
+		uint8_t u8Ret = u8UserMotorStart();
+		if (u8Ret == 0)
+		{
+			vCommReply("motor start\r\n");
+		}
+		else if (u8Ret == 1)
+		{
+			vCommReply("start rejected: fault latched (long-press key to clear)\r\n");
+		}
+		else
+		{
+			vCommReply("start rejected: current cal not done\r\n");
+		}
 	}
 	else if (strcmp(pLine, "stop") == 0)
 	{
-		vDRV8313Disable(DRV8313);
+		vUserMotorStop();
 		vCommReply("motor stop\r\n");
+	}
+	else if (strcmp(pLine, "state") == 0)
+	{
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
+			"run=%d align=%d src=%d cal=%d fault=%d mode=%d Iq_ref=%.3f\r\n",
+			u8MotorGetRun(), u8UserMotorIsAligning(), (int)emUserMotorGetSource(),
+			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault(),
+			(int)emAppMotorGetMode(), fAppMotorGetIqRef());
+		vCommReply(acTxBuf);
 	}
 	else
 	{

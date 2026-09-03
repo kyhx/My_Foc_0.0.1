@@ -108,16 +108,16 @@ stDRV8313StaticParameTdf;
 typedef struct
 {
 	uint16_t 					au16CurrentRaw[3];	//三相电流原始值(注入组JLDR1~3: Ia/Ib/Ic)
-	float 						fCurrentA[3];		//三相电流(A) Ia/Ib/Ic
+	volatile float 				fCurrentA[3];		//三相电流(A) Ia/Ib/Ic(ISR写入/主循环读)
 	uint16_t 					u16BusVoltageRaw;	//母线电压原始值(普通组DMA,CH4)
-	float 						fBusVoltage;		//母线电压(V)
+	volatile float 				fBusVoltage;		//母线电压(V)(主循环更新/读取)
 	enumPwnenStatusTdf 			emPwnen;			//使能状态
 	enumErrorStatusTdf 			emError;			//错误状态
-	volatile enumDRV8313FlagTdf 	emOcFlag;			//过流标志(任一相|I|超限)
-	volatile enumDRV8313FlagTdf 	emInjDone;			//注入组转换完成标志(中断方式)
+	volatile enumDRV8313FlagTdf 	emOcFlag;		//过流标志(任一相|I|超限)
+	volatile enumDRV8313FlagTdf 	emInjDone;		//注入组转换完成标志(中断方式)
 	volatile enumDRV8313CalStateTdf emCalState;		//电流零偏校准状态
 	uint32_t 					u32CalCount;		//校准采样计数
-	float 						fCalOffsetA[3];		//三相电流零偏补偿(A)
+	volatile float 				fCalOffsetA[3];		//三相电流零偏补偿(A)(ISR写入/主循环读)
 }
 stDRV8313DynamicParameTdf;
 
@@ -152,6 +152,10 @@ void 	vDRV8313ReadCurrent(enumDRV8313DeviceNumTdf emDeviceNum);	//读取并换�
 void 	vDRV8313CalibrateOffset(enumDRV8313DeviceNumTdf emDeviceNum);	//电流零偏校准(每采样调用)
 uint8_t u8DRV8313GetCalState(enumDRV8313DeviceNumTdf emDeviceNum);	//校准状态: 2=完成
 void 	HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc);	//注入组转换完成回调
+
+/* PWM同步ISR钩子: 注入组每次转换完成(电流已更新)后调用注册的应用层回调(如FOC电流环) */
+typedef void (*fpDRV8313IsrCb)(void);
+void 	vDRV8313RegisterIsrCb(fpDRV8313IsrCb fpCb);	//注册PWM同步ISR钩子(NULL=取消)
 
 /* 母线电压(普通组+DMA) */
 void 	vDRV8313StartDMA(enumDRV8313DeviceNumTdf emDeviceNum);		//启动普通组DMA

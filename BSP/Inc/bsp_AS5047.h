@@ -65,7 +65,6 @@ typedef struct
 	uint16_t 					u16CsPin;			//片选CS对应的GPIOPin
 	uint16_t 					u16Timeout;			//普通模式单帧传输超时(ms),0则用默认10
 	uint32_t 					u32MaxCount;		//编码器每圈码值(默认16384,可配置)
-	uint16_t 					u16PolePairs;		//电机极对数(机械角→电角度),0则用默认1
 	enumAS5047PTransferModeTdf 	emTransferMode;		//传输模式: Polling / DMA
 }
 stAS5047PStaticParameTdf;
@@ -78,8 +77,10 @@ typedef struct
 {
 	uint16_t 					u16Angle;			//最近一次角度(0~0x3FFF)
 	uint32_t 					u32AngleRaw;		//最近一次角度原始帧值(含状态位)
-	float 						fAngleElecRad;		//电角度(弧度,0~2π)
-	float 						fAngleElecDeg;		//电角度(度,0~360)
+	
+	float 						fAngleRad;			//单圈角度(弧度)
+	float 						fAngleDeg;			//单圈角度(度)
+
 	volatile enumAS5047PFlagTdf emError;			//错误标志(上次传输超时/命令帧错误)
 	volatile enumAS5047PFlagTdf emBusy;				//DMA传输进行中标志
 	volatile enumAS5047PFlagTdf emDmaDone;			//DMA传输完成标志
@@ -174,8 +175,7 @@ float 	 fAS5047PEncGetAngleDeg(enumAS5047PDeviceNumTdf emDeviceNum);
 /** 通用读取接口 */
 uint16_t u16AS5047PGetAngle(enumAS5047PDeviceNumTdf emDeviceNum);
 float 	 fAS5047PGetAngleRad(enumAS5047PDeviceNumTdf emDeviceNum);
-float 	 fAS5047PGetAngleElecRad(enumAS5047PDeviceNumTdf emDeviceNum);
-float 	 fAS5047PGetAngleElecDeg(enumAS5047PDeviceNumTdf emDeviceNum);
+float 	 fAS5047PGetAngleDeg(enumAS5047PDeviceNumTdf emDeviceNum);
 uint8_t  u8AS5047PGetError(enumAS5047PDeviceNumTdf emDeviceNum);
 uint8_t  u8AS5047PIsBusy(enumAS5047PDeviceNumTdf emDeviceNum);
 

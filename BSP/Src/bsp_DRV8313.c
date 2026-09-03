@@ -20,6 +20,20 @@
 //【0】DRV8313设备。
 stDRV8313DeviceParameTdf arrystDRV8313Deviceparam[DRV8313_DEVICE_NUM];
 
+/** PWM同步ISR钩子: 注入组转换完成(电流更新)后调用,供应用层FOC电流环使用 */
+static fpDRV8313IsrCb fpFocIsrCb = NULL;
+
+/**
+ * @brief 							注册PWM同步ISR钩子
+ * @param		fpCb			应用层回调函数(NULL=取消注册)
+ * @note							在注入组转换完成回调中读取电流后调用,用于每开关周期执行FOC电流环。
+ *
+ * */
+void vDRV8313RegisterIsrCb(fpDRV8313IsrCb fpCb)
+{
+	fpFocIsrCb = fpCb;
+}
+
 /**
  * @brief 										DRV8313设备初始化
  * @param		pstInit					 	DRV8313静态参数结构体地址
@@ -255,6 +269,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 		{
 			pstDev->DRV8313DynamicParame.emInjDone = emDRV8313Flag_Set;
 			vDRV8313ReadCurrent(emDev);
+
+			/** 调用注册的应用层FOC电流环(若已注册),在PWM同步时刻输出三相PWM */
+			if (fpFocIsrCb != NULL)
+			{
+				fpFocIsrCb();
+			}
 			break;
 		}
 	}

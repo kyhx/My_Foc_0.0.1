@@ -21,23 +21,29 @@ void vLedInit()
 	stLEDInit.	pstGPIOBase  =  LED_GPIO_Port;
 	stLEDInit. u16GPIOPin   =  LED_Pin;
 	stLEDInit. emOnLevel    =  emLedOnLevel_Low;
-	vLedDeviceInit( &stLEDInit,emLedDeviceNum0);
+	vLedDeviceInit( &stLEDInit,LED);
 	//PWNEN使能指示灯初始化，指示灯与DRV8313输出使能相连，打开指示灯与电机使能部分效果一样。
 	stLedStaticParameTdf stPWNENInit;
     stPWNENInit.	pstGPIOBase  =  PWNEN_GPIO_Port;
     stPWNENInit. u16GPIOPin   =  PWNEN_Pin;
     stPWNENInit. emOnLevel    =  emLedOnLevel_High;
-	vLedDeviceInit( &stPWNENInit,emLedDeviceNum1);
+	vLedDeviceInit( &stPWNENInit,PWNEN);
 
 }
 
 void vKeyInit()
 {
-	stKeyStaticParameTdf stInit;
+		stKeyStaticParameTdf stInit;
 	stInit.	pstGPIOBase  =  KEY_GPIO_Port;
 	stInit. u16GPIOPin   =  KEY_Pin;
-	stInit. emKeyLevel   =  emKeyOnLevelLow;	//KEY按下为低电平(内部上拉)
-	 vKeyDeviceInit( &stInit,emKeyDeviceNum0);
+	stInit. emKeyLevel   =  emKeyLevel_Low;	//KEY按下为低电平(内部上拉)
+	stInit. emKeyMode    =  emKeyMode_LongPress;	
+	stInit.u16LongPressTime = 0;
+    stInit.u16RepeatDelay = 0;
+    stInit.u16RepeatTime = 0;
+
+	 vKeyDeviceInit( &stInit,KEY);
+
 }
 
 void vPwmInit()
@@ -75,7 +81,6 @@ void vAS5047PInit()
 	stInit. u16CsPin       = SPI1_NSS_Pin;
 	stInit. u16Timeout     = 10;					//普通模式单帧超时(ms)
 	stInit. u32MaxCount    = SPI_AS5047P_MAX_COUNT;	//每圈16384码
-	stInit. u16PolePairs   = MOTOR_POLE_PAIRS;		//电机极对数(机械角→电角度)
 	/** 传输方式选择:
 	 *  - emAS5047PTransferMode_DMA:     非阻塞,主循环周期调 vAS5047PUpdate 持续更新
 	 *  - emAS5047PTransferMode_Polling: 阻塞,单帧约6us,简单可靠 */
