@@ -53,7 +53,7 @@
 #define ADC_CUR_GAIN 			(1.0f/(ADC_RSENSE*ADC_CUR_AMP))	//电流增益(A/V) = 1/(0.01×16.5) ≈ 6.0606
 #define ADC_UDC_GAIN 			23.0f		//母线电压增益(220K/10K=23)
 //电机参数
-#define MOTOR_POLE_PAIRS 		7		//电机极对数(机械角→电角度)
+//#define MOTOR_POLE_PAIRS 		7		//电机极对数(机械角→电角度)
 
 //电流采样有效性与保护参数
 #define ADC_RAW_MIN 			124		//LM324输出有效下限(raw): 0.1V≈124LSB, 低于此判饱和/断线

@@ -24,7 +24,6 @@
 #include "bsp_uart.h"
 #include "bsp_DRV8313.h"
 #include "motor.h"
-#include "app_motor.h"
 #include "user.h"
 #include "vofa.h"
 #include "top_config.h"
@@ -60,8 +59,8 @@ static void vCommProcessLine(char *pLine)
 	if (strcmp(pLine, "help") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"help angle current vd vq freq iq id foc "
-			"src(auto/manual/encspi/encabi/next/zero) mode open|current start stop state\r\n");
+			"help angle current vd vq freq "
+			"src(auto/manual/encspi/encabi/next/zero) start stop state\r\n");
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "angle") == 0)
@@ -92,36 +91,6 @@ static void vCommProcessLine(char *pLine)
 		vMotorOpenLoopSetVq((float)strtof(pLine + 3, NULL));
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vq=%.3f V\r\n", fMotorGetOpenLoopVq());
 		vCommReply(acTxBuf);
-	}
-	else if (strncmp(pLine, "iq ", 3) == 0)
-	{
-		vAppMotorSetIqRef((float)strtof(pLine + 3, NULL));
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Iq_ref=%.3f A\r\n", fAppMotorGetIqRef());
-		vCommReply(acTxBuf);
-	}
-	else if (strncmp(pLine, "id ", 3) == 0)
-	{
-		vAppMotorSetIdRef((float)strtof(pLine + 3, NULL));
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Id_ref=%.3f A\r\n", fAppMotorGetIdRef());
-		vCommReply(acTxBuf);
-	}
-	else if (strcmp(pLine, "foc") == 0)
-	{
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"mode=%d Id_ref=%.3f Iq_ref=%.3f Id=%.3f Iq=%.3f Vd=%.3f Vq=%.3f\r\n",
-			(int)emAppMotorGetMode(), fAppMotorGetIdRef(), fAppMotorGetIqRef(),
-			fAppMotorGetId(), fAppMotorGetIq(), fAppMotorGetVd(), fAppMotorGetVq());
-		vCommReply(acTxBuf);
-	}
-	else if (strcmp(pLine, "mode open") == 0)
-	{
-		vAppMotorSetMode(emAppMotorMode_OpenLoop);
-		vCommReply("mode open (开环)\r\n");
-	}
-	else if (strcmp(pLine, "mode current") == 0)
-	{
-		vAppMotorSetMode(emAppMotorMode_Current);
-		vCommReply("mode current (FOC电流闭环)\r\n");
 	}
 	else if (strncmp(pLine, "freq ", 5) == 0)
 	{
@@ -184,10 +153,9 @@ static void vCommProcessLine(char *pLine)
 	else if (strcmp(pLine, "state") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"run=%d src=%s cal=%d fault=%d mode=%d Iq_ref=%.3f\r\n",
+			"run=%d src=%s cal=%d fault=%d\r\n",
 			u8MotorGetRun(), pUserMotorGetSourceName(),
-			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault(),
-			(int)emAppMotorGetMode(), fAppMotorGetIqRef());
+			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault());
 		vCommReply(acTxBuf);
 	}
 	else

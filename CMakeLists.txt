@@ -58,7 +58,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Mid/Src/comm.c
     Mid/Src/foc.c
     Mid/Src/motor.c
-    App/Src/app_motor.c
 
 )
 

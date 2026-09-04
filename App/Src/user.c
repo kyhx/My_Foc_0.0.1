@@ -14,15 +14,15 @@
 #include "bsp_key.h"
 #include "bsp_led.h"
 #include "motor.h"
-#include "app_motor.h"
 #include "user.h"
 #include "top_config.h"
 #include "bsp_config.h"
 #include "oscilloscope.h"
 #include "app_comm.h"
+#include "motor_config.h"
 
 /* 开环测试参数(可按电机实测调节) */
-#define OL_START_FREQ_HZ	14.0f	/* 自动生成默认电频率(Hz) */
+#define OL_START_FREQ_HZ	10.0f	/* 自动生成默认电频率(Hz) */
 #define OL_VD_V				0.0f	/* 开环 d 轴电压(V) */
 #define OL_VQ_V				0.5f	/* 开环 q 轴电压(V),幅值决定电流 */
 
@@ -119,7 +119,6 @@ static uint8_t u8MotorStart(void)
 	}
 
 	vMotorSetAngleSource(emSrc);
-	vAppMotorSetMode(emAppMotorMode_OpenLoop);	/* 角度测试用开环输出观察三相电流 */
 	vMotorSetRun(1);
 	vDRV8313Enable(DRV8313);
 	return 0;
@@ -157,15 +156,12 @@ void vUserInit(void)
 	APP_COMM_Init();
 
 	/** 2. 电角度模块初始化(极对数取 bsp_config 的 MOTOR_POLE_PAIRS) */
-	vMotorAngleInit(MOTOR_POLE_PAIRS);
+	vMotorAngleInit(MOTOR_CONFIG_POLE_PAIRS);
 	vMotorSetAutoFreqHz(OL_START_FREQ_HZ);
 	vMotorSetAngleSource(emMotorAngleSrc_Auto);
 	s_emSelSrc = emMotorAngleSrc_Auto;
 	vMotorOpenLoopSetVd(OL_VD_V);
 	vMotorOpenLoopSetVq(OL_VQ_V);
-
-	/** 3. 电机控制应用(FOC电流环)初始化 */
-	vAppMotorInit();
 }
 
 void vUserExecute(void)

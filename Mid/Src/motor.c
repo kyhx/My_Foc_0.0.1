@@ -19,6 +19,7 @@
   */
 
 #include "motor.h"
+#include "foc.h"
 #include "bsp_config.h"
 #include <math.h>
 
@@ -245,4 +246,66 @@ float fMotorGetElecAngleRad(void)
 float fMotorGetElecAngleDeg(void)
 {
 	return s_fOutRad * (360.0f / MOTOR_TWO_PI);
+}
+
+/* ==================== 运行控制 / 开环输出(原 App/app_motor.c,迁入) ==================== */
+/* 说明: 电流环已清除,本模块只保留开环电压模式。
+ * 开环: 主循环 vMotorOpenLoopRun(fUdc) 按当前电角度逆Park→SVPWM→三相PWM。 */
+static uint8_t 	s_u8Run  = 0;			/* 运行标志 */
+static float 	s_fOlVd  = 0.0f;		/* 开环 d 轴电压(V) */
+static float 	s_fOlVq  = 0.0f;		/* 开环 q 轴电压(V) */
+
+void vMotorSetRun(uint8_t bRun)
+{
+	s_u8Run = (bRun) ? 1u : 0u;
+}
+
+uint8_t u8MotorGetRun(void)
+{
+	return s_u8Run;
+}
+
+void vMotorOpenLoopSetVd(float fVd)
+{
+	s_fOlVd = fVd;
+}
+
+void vMotorOpenLoopSetVq(float fVq)
+{
+	s_fOlVq = fVq;
+}
+
+float fMotorGetOpenLoopVd(void)
+{
+	return s_fOlVd;
+}
+
+float fMotorGetOpenLoopVq(void)
+{
+	return s_fOlVq;
+}
+
+/**
+ * @brief 								开环运行一步输出(主循环周期调用)
+ * @param		fUdc			母线电压(V),供 SVPWM 归一化
+ * @note									仅在 运行 时,按当前 vd/vq 与电角度逆Park→SVPWM→三相PWM;
+ * 									停止时直接返回。调用前需 vMotorAngleUpdate()。
+ *
+ * */
+void vMotorOpenLoopRun(float fUdc)
+{
+	T_Dq_t 			stDq;
+	T_AlphaBeta_t 	stAb;
+	float 			fDutyA, fDutyB, fDutyC;
+
+	if (s_u8Run == 0)
+	{
+		return;
+	}
+
+	stDq.fD = s_fOlVd;
+	stDq.fQ = s_fOlVq;
+	T_InvPark(&stDq, fMotorGetElecAngleRad(), &stAb);
+	SVPWM(&stAb, fUdc, &fDutyA, &fDutyB, &fDutyC);
+	vPwmSetDutyAll(PWM, fDutyA, fDutyB, fDutyC);
 }

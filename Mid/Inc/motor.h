@@ -138,7 +138,7 @@ float fMotorGetEncoderAbiElecRad(void);
  * */
 void vMotorCaptureEncoderZero(void);
 
-/* ==================== 运行控制 / 开环(FOC 电流环实现于 App/app_motor.c) ==================== */
+/* ==================== 运行控制 / 开环(实现于本模块 motor.c) ==================== */
 void vMotorSetRun(uint8_t bRun);
 uint8_t u8MotorGetRun(void);
 void vMotorOpenLoopSetVd(float fVd);
