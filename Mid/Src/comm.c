@@ -33,7 +33,7 @@
 #include <stdlib.h>
 
 #define COMM_RX_BUF_SIZE 	64		//接收行缓冲
-#define COMM_TX_BUF_SIZE 	128		//回复缓冲
+#define COMM_TX_BUF_SIZE 	200		//回复缓冲
 
 static uint8_t 		au8RxBuf[COMM_RX_BUF_SIZE];
 static uint8_t 		u8RxIdx = 0;
@@ -60,13 +60,17 @@ static void vCommProcessLine(char *pLine)
 	if (strcmp(pLine, "help") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"cmds: help angle current vd <v> vq <v> freq <hz> iq <A> id <A> foc src auto|manual|encoder mode open|current start stop state\r\n");
+			"help angle current vd vq freq iq id foc "
+			"src(auto/manual/encspi/encabi/next/zero) mode open|current start stop state\r\n");
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "angle") == 0)
 	{
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "theta_elec=%.4f rad src=%d\r\n",
-				fMotorGetElecAngleRad(), (int)emMotorGetAngleSource());
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
+				"src=%s theta=%.4f rad  auto=%.4f spi=%.4f abi=%.4f rad\r\n",
+				pMotorGetAngleSourceName(), fMotorGetElecAngleRad(),
+				fMotorGetAutoElecRad(), fMotorGetEncoderSpiElecRad(),
+				fMotorGetEncoderAbiElecRad());
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "current") == 0)
@@ -133,12 +137,28 @@ static void vCommProcessLine(char *pLine)
 	else if (strcmp(pLine, "src manual") == 0)
 	{
 		vUserMotorSetSource(emMotorAngleSrc_Manual);
-		vCommReply("src manual\r\n");
+		vCommReply("src manual (固定值)\r\n");
 	}
-	else if (strcmp(pLine, "src encoder") == 0)
+	else if (strcmp(pLine, "src encspi") == 0)
 	{
-		vUserMotorSetSource(emMotorAngleSrc_Encoder);
-		vCommReply("src encoder\r\n");
+		vUserMotorSetSource(emMotorAngleSrc_EncoderSpi);
+		vCommReply("src encspi (编码器SPI)\r\n");
+	}
+	else if (strcmp(pLine, "src encabi") == 0)
+	{
+		vUserMotorSetSource(emMotorAngleSrc_EncoderAbi);
+		vCommReply("src encabi (编码器ABI)\r\n");
+	}
+	else if (strcmp(pLine, "src next") == 0)
+	{
+		vUserMotorNextSource();
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "src next -> %s\r\n", pUserMotorGetSourceName());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "zero") == 0)
+	{
+		vUserMotorCaptureEncoderZero();
+		vCommReply("encoder zero captured\r\n");
 	}
 	else if (strcmp(pLine, "start") == 0)
 	{
@@ -164,8 +184,8 @@ static void vCommProcessLine(char *pLine)
 	else if (strcmp(pLine, "state") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"run=%d align=%d src=%d cal=%d fault=%d mode=%d Iq_ref=%.3f\r\n",
-			u8MotorGetRun(), u8UserMotorIsAligning(), (int)emUserMotorGetSource(),
+			"run=%d src=%s cal=%d fault=%d mode=%d Iq_ref=%.3f\r\n",
+			u8MotorGetRun(), pUserMotorGetSourceName(),
 			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault(),
 			(int)emAppMotorGetMode(), fAppMotorGetIqRef());
 		vCommReply(acTxBuf);

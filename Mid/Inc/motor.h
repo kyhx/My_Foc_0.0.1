@@ -1,22 +1,19 @@
 /**
   ******************************************************************************
   * @file    motor.h
-  * @brief   电机电角度获取来源中间层头文件
+  * @brief   电机电角度获取模块头文件
   * @author  可以航行
-  * @version V1.0.0
+  * @version V2.0.0
   * @date    2026-09-04
   ******************************************************************************
   * @attention
-  * 电角度获取来源设置,支持三种来源运行时切换:
-  *   - 自动生成(频率): 按设定的电频率匀速积分扫描,适合开环对相/扫频调试;
-  *   - 固定值:         手动给定一个恒定电角度,适合定位/对相验证;
-  *   - 编码器:         读取AS5047P机械角 × 极对数得电角度,供闭环使用。
-  *
-  * 使用流程:
-  *   1. 上电调用 vMotorAngleInit(u16PolePairs) 初始化;
-  *   2. 周期(主循环/电流环)调用 vMotorAngleUpdate() 按所选来源刷新电角度;
-  *   3. 用 fMotorGetElecAngleRad() 读取当前电角度;
-  *   4. 需要时用 vMotorSetAngleSource() 运行时切换来源,并设置对应参数。
+  * 电角度获取来源(enumMotorAngleSrcTdf),共 4 种,用于 FOC 测试:
+  *   - Auto       自动生成(按电频率 2πf·Δt 积分,Δt 用 HAL_GetTick 实测)
+  *   - Manual     固定值(给定恒定电角度)
+  *   - EncoderSpi AS5047P SPI 模式(SPI 绝对角 × 极对数,减零位偏移)
+  *   - EncoderAbi AS5047P ABI/TIM 正交编码器模式(ABI 角 × 极对数,减零位偏移)
+  * 模块每次 vMotorAngleUpdate() 同时刷新 Auto / EncSpi / EncAbi 三个电角度缓存
+  * (供 VOFA 同时显示比对),并按当前所选来源输出 fMotorGetElecAngleRad() 供 FOC。
   ******************************************************************************
   */
 
@@ -26,176 +23,128 @@
 #include "top_config.h"
 #include <stdint.h>
 
-/**	@brief 			电角度获取来源枚举
- * 	@note
+/**	@brief 			电角度获取来源枚举(4 种)
+ * 	@note				用作启动/测试来源选择;Max 用于取模循环切换
  *
  * */
 typedef enum
 {
-	emMotorAngleSrc_Auto = 0,	//自动生成(按电频率匀速积分)
-	emMotorAngleSrc_Manual,		//固定值(手动给定)
-	emMotorAngleSrc_Encoder,	//编码器(机械角 × 极对数)
+	emMotorAngleSrc_Auto = 0,	/* 自动生成(斜坡) */
+	emMotorAngleSrc_Manual,		/* 固定值 */
+	emMotorAngleSrc_EncoderSpi,	/* 编码器 SPI 模式(AS5047 SPI 绝对角) */
+	emMotorAngleSrc_EncoderAbi,	/* 编码器 ABI 模式(AS5047 ABI/TIM 正交编码器) */
+	emMotorAngleSrc_Max,		/* 来源数量(用于循环切换取模) */
 }
 enumMotorAngleSrcTdf;
 
 /*	@brief 						电角度模块初始化
- * 	@param		u16PolePairs	电机极对数(机械角→电角度)
- * 	@note						默认来源为自动生成,频率初始为0(需 vMotorSetAutoFreqHz 设定),
- * 								时间基准、角度、零位偏移均复位。
+ * 	@param		u16PolePairs			极对数(如 bsp_config 的 MOTOR_POLE_PAIRS=7)
+ * 	@note							复位默认来源=Auto、频率=0、零位偏移=0。
  *
  * */
 void vMotorAngleInit(uint16_t u16PolePairs);
 
-/*	@brief 						刷新当前电角度(按所选来源),需周期调用
- * 	@note						- Auto:    用调用时间差 × 电频率积分推进角度;
- * 								- Manual:  使用手动设定的固定值;
- * 								- Encoder: 读 AS5047P 机械角 × 极对数(减零位偏移)。
- * 								编码器来源要求主循环已周期调用 vAS5047PUpdate(AS5047P)。
+/*	@brief 						刷新电角度(主循环周期调用)
+ * 	@note							同时更新 Auto 斜坡、EncSpi、EncAbi 三个缓存角度,
+ * 								并按当前来源计算输出角度 fMotorGetElecAngleRad。
  *
  * */
 void vMotorAngleUpdate(void);
 
-/*	@brief 						获取当前电角度(弧度)
- * 	@retval						电角度,归一化 [0, 2π)
- *
- * */
-float fMotorGetElecAngleRad(void);
-
-/*	@brief 						获取当前电角度(度)
- * 	@retval						电角度 [0, 360)
- *
- * */
-float fMotorGetElecAngleDeg(void);
-
-/*	@brief 						设置电角度获取来源(运行时切换)
- * 	@param		emSrc			来源: Auto / Manual / Encoder
- * 	@note						切换不改变各来源已保存的参数。
+/*	@brief 						设置当前电角度来源
+ * 	@param		emSrc			来源枚举(Auto/Manual/EncoderSpi/EncoderAbi)
  *
  * */
 void vMotorSetAngleSource(enumMotorAngleSrcTdf emSrc);
 
-/*	@brief 						获取当前来源
- * 	@retval						当前来源枚举
+/*	@brief 						获取当前电角度来源
+ * 	@retval						来源枚举
  *
  * */
 enumMotorAngleSrcTdf emMotorGetAngleSource(void);
 
-/* ==================== 自动生成(频率)参数 ==================== */
-/*	@brief 						设置自动生成电频率
- * 	@param		fFreqHz			电频率(Hz),正=正转,负=反转
+/*	@brief 						获取当前来源名称字符串(供串口/上位机显示)
+ * 	@retval						"auto"/"manual"/"encspi"/"encabi"
+ *
+ * */
+const char *pMotorGetAngleSourceName(void);
+
+/*	@brief 						获取当前输出电角度(所选来源,rad,0~2π)
+ * 	@retval						电角度(rad),供 FOC Park/逆Park
+ *
+ * */
+float fMotorGetElecAngleRad(void);
+
+/*	@brief 						获取当前输出电角度(所选来源,度)
+ * 	@retval						电角度(°)
+ *
+ * */
+float fMotorGetElecAngleDeg(void);
+
+/* ==================== Auto 自动生成 ==================== */
+/*	@brief 						设置自动生成电频率(Hz)
+ * 	@param		fFreqHz			电频率(Hz),决定自动斜坡转速
  *
  * */
 void vMotorSetAutoFreqHz(float fFreqHz);
-
 /*	@brief 						获取自动生成电频率
- * 	@retval						当前电频率(Hz)
+ * 	@retval						电频率(Hz)
  *
  * */
 float fMotorGetAutoFreqHz(void);
-
-/*	@brief 						设置自动生成电角速度
- * 	@param		fOmega			电角速度(rad/s),正=正转,负=反转
- * 	@note						等价于频率:f = ω / 2π
- *
- * */
-void vMotorSetAutoSpeedRadS(float fOmega);
-
-/*	@brief 						获取自动生成电角速度
- * 	@retval						电角速度(rad/s)
- *
- * */
-float fMotorGetAutoSpeedRadS(void);
-
-/*	@brief 						自动生成角度清零(从 0 rad 重新开始扫描)
+/*	@brief 						复位自动生成角度(清零相位与时间基准)
+ * 	@note							启停/切换来源时可调用,保证斜坡从 0 平滑起步。
  *
  * */
 void vMotorResetAutoAngle(void);
-
-/* ==================== 固定值(手动)参数 ==================== */
-/*	@brief 						设置手动固定电角度
- * 	@param		fElecRad		固定电角度(rad),内部自动归一化 [0, 2π)
+/*	@brief 						获取自动生成电角度(rad,VOFA显示用)
+ * 	@retval						自动电角度(rad,0~2π)
  *
  * */
-void vMotorSetManualElecRad(float fElecRad);
+float fMotorGetAutoElecRad(void);
 
-/*	@brief 						设置手动固定电角度(度)
- * 	@param		fElecDeg		固定电角度(度)
+/* ==================== Manual 固定值 ==================== */
+/*	@brief 						设置固定电角度(rad)
+ * 	@param		fRad			电角度(rad),自动归一化到 0~2π
  *
  * */
-void vMotorSetManualElecDeg(float fElecDeg);
-
-/*	@brief 						获取手动设定的固定电角度
- * 	@retval						手动电角度(rad,归一化 [0, 2π))
+void vMotorSetManualElecRad(float fRad);
+/*	@brief 						设置固定电角度(度)
+ * 	@param		fDeg			电角度(°)
+ *
+ * */
+void vMotorSetManualElecDeg(float fDeg);
+/*	@brief 						获取固定电角度
+ * 	@retval						电角度(rad)
  *
  * */
 float fMotorGetManualElecRad(void);
 
-/* ==================== 编码器参数 ==================== */
-/*	@brief 						设置编码器机械零位偏移
- * 	@param		fZeroRad		机械零位偏移(rad)
- * 	@note						电角度 = (θmech - θzero) × 极对数
+/* ==================== Encoder SPI / ABI(供 VOFA 比对) ==================== */
+/*	@brief 						获取编码器 SPI 模式电角度(rad,0~2π)
+ * 	@retval						电角度(rad)= (SPI机械角-零位)×极对数 取模
  *
  * */
-void vMotorSetEncoderZeroOffsetRad(float fZeroRad);
-
-/*	@brief 						获取编码器机械零位偏移
- * 	@retval						机械零位偏移(rad)
+float fMotorGetEncoderSpiElecRad(void);
+/*	@brief 						获取编码器 ABI 模式电角度(rad,0~2π)
+ * 	@retval						电角度(rad)= (ABI机械角-零位)×极对数 取模
  *
  * */
-float fMotorGetEncoderZeroOffsetRad(void);
+float fMotorGetEncoderAbiElecRad(void);
 
-/*	@brief 						以当前 AS5047P 机械角捕获为零位
- * 	@note							常用于上电对齐/对相完成后记录机械零位,
- * 								使此刻电角度为 0。
+/*	@brief 						捕获编码器零位偏移
+ * 	@note							把当前 SPI 与 ABI 机械角记为电角度 0(转子对齐后用)。
  *
  * */
 void vMotorCaptureEncoderZero(void);
 
-/* ==================== 开环运行(启停) ==================== */
-/*	@brief 						设置运行状态(开环启动/停止)
- * 	@param		bRun			1=启动, 0=停止
- * 	@note						启动瞬间自动生成角度清零(磁场从0 rad起),桥臂安全由
- * 								上层配合 vDRV8313Enable/Disable 控制。
- *
- * */
+/* ==================== 运行控制 / 开环(FOC 电流环实现于 App/app_motor.c) ==================== */
 void vMotorSetRun(uint8_t bRun);
-
-/*	@brief 						获取运行状态
- * 	@retval						1=运行, 0=停止
- *
- * */
 uint8_t u8MotorGetRun(void);
-
-/*	@brief 						设置开环 d 轴电压指令
- * 	@param		fVd			d轴电压指令(V)
- *
- * */
 void vMotorOpenLoopSetVd(float fVd);
-
-/*	@brief 						设置开环 q 轴电压指令(决定电流/转矩)
- * 	@param		fVq			q轴电压指令(V)
- *
- * */
 void vMotorOpenLoopSetVq(float fVq);
-
-/*	@brief 						获取开环 d 轴电压指令
- * 	@retval					d轴电压指令(V)
- *
- * */
 float fMotorGetOpenLoopVd(void);
-
-/*	@brief 						获取开环 q 轴电压指令
- * 	@retval					q轴电压指令(V)
- *
- * */
 float fMotorGetOpenLoopVq(void);
-
-/*	@brief 						开环运行一步输出(周期调用)
- * 	@param		fUdc			母线电压(V),供SVPWM归一化
- * 	@note						运行中: dq电压指令按当前电角度逆Park→SVPWM→三相占空比;
- * 								停止: 三相占空比回0.5。调用前需先 vMotorAngleUpdate()。
- *
- * */
 void vMotorOpenLoopRun(float fUdc);
 
-#endif
+#endif /* __MOTOR_H */
