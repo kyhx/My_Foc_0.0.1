@@ -38,7 +38,7 @@ typedef enum
 enumMotorAngleSrcTdf;
 
 /*	@brief 						电角度模块初始化
- * 	@param		u16PolePairs			极对数(如 bsp_config 的 MOTOR_POLE_PAIRS=7)
+ * 	@param		u16PolePairs			极对数(如 motor_config.h 的 MOTOR_CONFIG_POLE_PAIRS=7)
  * 	@note							复位默认来源=Auto、频率=0、零位偏移=0。
  *
  * */
@@ -138,7 +138,19 @@ float fMotorGetEncoderAbiElecRad(void);
  * */
 void vMotorCaptureEncoderZero(void);
 
-/* ==================== 运行控制 / 开环(实现于本模块 motor.c) ==================== */
+/*	@brief 						设置编码器方向
+ * 	@param		i8Dir			+1=正向(默认); -1=反向(编码器机械角取反)
+ * 	@note							上电调机方向确认发现反向时自动置 -1。
+ *
+ * */
+void vMotorSetEncoderDir(int8_t i8Dir);
+/*	@brief 						获取编码器方向
+ * 	@retval						+1 或 -1
+ *
+ * */
+int8_t i8MotorGetEncoderDir(void);
+
+/* ==================== 运行控制 / 开环(实现于 App/app_motor.c) ==================== */
 void vMotorSetRun(uint8_t bRun);
 uint8_t u8MotorGetRun(void);
 void vMotorOpenLoopSetVd(float fVd);

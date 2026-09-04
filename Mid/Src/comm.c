@@ -24,6 +24,7 @@
 #include "bsp_uart.h"
 #include "bsp_DRV8313.h"
 #include "motor.h"
+#include "app_motor.h"
 #include "user.h"
 #include "vofa.h"
 #include "top_config.h"
@@ -50,17 +51,40 @@ static void vCommReply(const char *pStr)
 }
 
 /**
- * @brief 										解析并执行一行命令
- * @param		pLine						以'\0'结尾的命令行
+ * @brief 							裁剪字符串首尾空白(空格/制表/回车/换行)
+ * @param		s					待裁剪字符串(原地,尾部写'\0')
+ * @retval							指向裁剪后起始的指针
+ *
+ * */
+static char *pCommTrim(char *s)
+{
+	char *e;
+	while ((*s == ' ') || (*s == '\t') || (*s == '\r') || (*s == '\n'))
+	{
+		s++;
+	}
+	e = s + strlen(s);
+	while ((e > s) && ((e[-1] == ' ') || (e[-1] == '\t') || (e[-1] == '\r') || (e[-1] == '\n')))
+	{
+		e--;
+	}
+	*e = '\0';
+	return s;
+}
+
+/**
+ * @brief 							解析并执行一行命令
+ * @param		pLine				以'\0'结尾的命令行
  *
  * */
 static void vCommProcessLine(char *pLine)
 {
+	pLine = pCommTrim(pLine);
 	if (strcmp(pLine, "help") == 0)
 	{
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"help angle current vd vq freq "
-			"src(auto/manual/encspi/encabi/next/zero) start stop state\r\n");
+			"help angle current vd vq freq iq id foc "
+			"src auto|manual|encspi|encabi mode open|current start stop state\r\n");
 		vCommReply(acTxBuf);
 	}
 	else if (strcmp(pLine, "angle") == 0)
@@ -74,10 +98,10 @@ static void vCommProcessLine(char *pLine)
 	}
 	else if (strcmp(pLine, "current") == 0)
 	{
-		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Ia=%.3f Ib=%.3f Ic=%.3f A\r\n",
-				fDRV8313GetCurrentA(DRV8313, 0),
-				fDRV8313GetCurrentA(DRV8313, 1),
-				fDRV8313GetCurrentA(DRV8313, 2));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Ia=%d Ib=%d Ic=%d mA\r\n",
+				(int)(fDRV8313GetCurrentA(DRV8313, 0) * 1000.0f),
+				(int)(fDRV8313GetCurrentA(DRV8313, 1) * 1000.0f),
+				(int)(fDRV8313GetCurrentA(DRV8313, 2) * 1000.0f));
 		vCommReply(acTxBuf);
 	}
 	else if (strncmp(pLine, "vd ", 3) == 0)
@@ -90,6 +114,42 @@ static void vCommProcessLine(char *pLine)
 	{
 		vMotorOpenLoopSetVq((float)strtof(pLine + 3, NULL));
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Vq=%.3f V\r\n", fMotorGetOpenLoopVq());
+		vCommReply(acTxBuf);
+	}
+	else if (strncmp(pLine, "iq ", 3) == 0)
+	{
+		vAppMotorSetIqRef((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Iq_ref=%.3f A\r\n", fAppMotorGetIqRef());
+		vCommReply(acTxBuf);
+	}
+	else if (strncmp(pLine, "id ", 3) == 0)
+	{
+		vAppMotorSetIdRef((float)strtof(pLine + 3, NULL));
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "Id_ref=%.3f A\r\n", fAppMotorGetIdRef());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "foc") == 0)
+	{
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
+			"mode=%d Id_ref=%.3f Iq_ref=%.3f Id=%.3f Iq=%.3f Vd=%.3f Vq=%.3f\r\n",
+			(int)emAppMotorGetMode(), fAppMotorGetIdRef(), fAppMotorGetIqRef(),
+			fAppMotorGetId(), fAppMotorGetIq(), fAppMotorGetVd(), fAppMotorGetVq());
+		vCommReply(acTxBuf);
+	}
+	else if (strcmp(pLine, "mode open") == 0)
+	{
+		vAppMotorSetMode(emAppMotorMode_OpenLoop);
+		vCommReply("mode open (开环)\r\n");
+	}
+	else if (strcmp(pLine, "mode current") == 0)
+	{
+		vAppMotorSetMode(emAppMotorMode_Current);
+		vCommReply("mode current (FOC电流闭环)\r\n");
+	}
+	else if (strcmp(pLine, "mode toggle") == 0)
+	{
+		vAppMotorToggleMode();
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "mode -> %d\r\n", (int)emAppMotorGetMode());
 		vCommReply(acTxBuf);
 	}
 	else if (strncmp(pLine, "freq ", 5) == 0)
@@ -152,15 +212,20 @@ static void vCommProcessLine(char *pLine)
 	}
 	else if (strcmp(pLine, "state") == 0)
 	{
+		int iUdcMv = (int)(fDRV8313GetBusVoltage(DRV8313) * 1000.0f);
+		int iIqMa  = (int)(fAppMotorGetIqRef() * 1000.0f);
 		snprintf(acTxBuf, COMM_TX_BUF_SIZE,
-			"run=%d src=%s cal=%d fault=%d\r\n",
+			"run=%d src=%s cal=%d latch=%d oc=%d drvf=%d mode=%d udc=%dmV Iq=%dmA dir=%d\r\n",
 			u8MotorGetRun(), pUserMotorGetSourceName(),
-			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault());
+			u8DRV8313GetCalState(DRV8313), u8UserMotorGetFault(),
+			u8DRV8313GetOcFlag(DRV8313), u8DRV8313GetFault(DRV8313),
+			(int)emAppMotorGetMode(), iUdcMv, iIqMa, (int)i8MotorGetEncoderDir());
 		vCommReply(acTxBuf);
 	}
 	else
 	{
-		vCommReply("unknown cmd, type 'help'\r\n");
+		snprintf(acTxBuf, COMM_TX_BUF_SIZE, "unknown '%s'\r\n", pLine);
+		vCommReply(acTxBuf);
 	}
 }
 
@@ -185,7 +250,8 @@ void APP_COMM_Execute(void)
 {
 	uint8_t u8Byte;
 
-	if (u8UartIsRxNew(emUartDeviceNum0))
+	/* 一次性把接收环形缓冲里的字节全部取出解析,避免积压丢行 */
+	while (u8UartIsRxNew(emUartDeviceNum0))
 	{
 		u8Byte = u8UartGetRxByte(emUartDeviceNum0);
 

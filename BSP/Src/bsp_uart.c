@@ -19,6 +19,12 @@
 //【0】USART1设备。
 stUartDeviceParameTdf arrystUartDeviceparam[UART_DEVICE_NUM];
 
+/* 接收环形缓冲(中断写入/主循环读取),避免快速或整串接收时丢字节 */
+#define UART_RX_FIFO_SIZE		256
+static volatile uint8_t 	au8RxFifo[UART_DEVICE_NUM][UART_RX_FIFO_SIZE];
+static volatile uint16_t 	au16RxHead[UART_DEVICE_NUM];	/* 写指针(仅ISR修改) */
+static volatile uint16_t 	au16RxTail[UART_DEVICE_NUM];	/* 读指针(仅主循环修改) */
+
 
 /**
  * @brief 										UART设备初始化
@@ -42,6 +48,10 @@ void vUartDeviceInit(stUartStaticParameTdf *pstInit, enumUartDeviceNumTdf emDevi
 	pstDev->UartDynamicParame.emRxReady= emUartFlag_Reset;
 	pstDev->UartDynamicParame.emRxNew  = emUartFlag_Reset;
 	pstDev->UartDynamicParame.u8RxByte = 0;
+
+	/* 接收环形缓冲复位 */
+	au16RxHead[emDeviceNum] = 0;
+	au16RxTail[emDeviceNum] = 0;
 }
 
 /**
@@ -192,26 +202,31 @@ HAL_StatusTypeDef enUartReceiveByteIT(enumUartDeviceNumTdf emDeviceNum)
  * */
 uint8_t u8UartIsRxNew(enumUartDeviceNumTdf emDeviceNum)
 {
-	stUartDeviceParameTdf *pstDev = &arrystUartDeviceparam[emDeviceNum];
-
-	return (uint8_t)(pstDev->UartDynamicParame.emRxNew == emUartFlag_Set);
+	if ((uint8_t)emDeviceNum >= UART_DEVICE_NUM)
+	{
+		return 0;
+	}
+	return (au16RxHead[emDeviceNum] != au16RxTail[emDeviceNum]) ? 1u : 0u;
 }
 
 /**
- * @brief 										UART获取并清除最近接收字节
+ * @brief 										UART从接收环形缓冲取一个字节
  * @param		emDeviceNum		 		UART设备号
- * @retval									最近接收的单字节数据(同时清除emRxNew)
+ * @retval									取出的字节(缓冲空返回0)
  *
  * */
 uint8_t u8UartGetRxByte(enumUartDeviceNumTdf emDeviceNum)
 {
-	stUartDeviceParameTdf *pstDev = &arrystUartDeviceparam[emDeviceNum];
 	uint8_t u8Byte = 0;
 
-	if (pstDev->UartDynamicParame.emRxNew == emUartFlag_Set)
+	if ((uint8_t)emDeviceNum >= UART_DEVICE_NUM)
 	{
-		pstDev->UartDynamicParame.emRxNew = emUartFlag_Reset;
-		u8Byte = pstDev->UartDynamicParame.u8RxByte;
+		return 0;
+	}
+	if (au16RxHead[emDeviceNum] != au16RxTail[emDeviceNum])
+	{
+		u8Byte = au8RxFifo[emDeviceNum][au16RxTail[emDeviceNum]];
+		au16RxTail[emDeviceNum] = (uint16_t)((au16RxTail[emDeviceNum] + 1u) % UART_RX_FIFO_SIZE);
 	}
 	return u8Byte;
 }
@@ -245,14 +260,22 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
  * */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	uint8_t u8Idx;
+	uint8_t 	u8Idx;
+	uint16_t 	u16Next;
 
 	for (u8Idx = 0; u8Idx < UART_DEVICE_NUM; u8Idx++)
 	{
 		if (arrystUartDeviceparam[u8Idx].UartStaticParame.pstUartHandle == huart)
 		{
+			/* 压入接收环形缓冲(ISR上下文,只写head) */
+			u16Next = (uint16_t)((au16RxHead[u8Idx] + 1u) % UART_RX_FIFO_SIZE);
+			if (u16Next != au16RxTail[u8Idx])	/* 未满才写入,满则丢弃新字节 */
+			{
+				au8RxFifo[u8Idx][au16RxHead[u8Idx]] =
+					arrystUartDeviceparam[u8Idx].UartDynamicParame.u8RxByte;
+			au16RxHead[u8Idx] = u16Next;
+			}
 			arrystUartDeviceparam[u8Idx].UartDynamicParame.emRxReady = emUartFlag_Set;
-			arrystUartDeviceparam[u8Idx].UartDynamicParame.emRxNew   = emUartFlag_Set;
 			/* 自动重装单字节接收,持续接收下一位 */
 			HAL_UART_Receive_IT(huart,
 								(uint8_t*)&arrystUartDeviceparam[u8Idx].UartDynamicParame.u8RxByte, 1);

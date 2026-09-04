@@ -3,7 +3,7 @@
   * @file    motor.c
   * @brief   电机电角度获取模块源文件
   * @author  可以航行
-  * @version V2.0.0
+  * @version V2.1.0
   * @date    2026-09-04
   ******************************************************************************
   * @attention
@@ -15,11 +15,12 @@
   * 编码器机械角来源: SPI 用 fAS5047PGetAngleRad(AS5047P),ABI 用
   * fAS5047PEncGetAngleRad(AS5047P)。二者需上层主循环已调用 vAS5047PUpdate /
   * vAS5047PEncUpdate 刷新。电角度 = (机械角 - 零位) × 极对数,对 2π 取模。
+  *
+  * 注: 运行控制/开环/电流环由 App/app_motor.c 实现(motor.h 仅声明)。
   ******************************************************************************
   */
 
 #include "motor.h"
-#include "foc.h"
 #include "bsp_config.h"
 #include <math.h>
 
@@ -39,6 +40,9 @@ static float 				s_fManualRad    = 0.0f;	/* 固定电角度(rad) */
 /* 编码器零位偏移(机械角,rad) */
 static float 				s_fSpiZeroRad   = 0.0f;
 static float 				s_fAbiZeroRad   = 0.0f;
+
+/* 编码器方向: +1 正向 / -1 反向(编码器机械角取反,上电调机确认方向后定) */
+static float 				s_fEncDir       = 1.0f;
 
 /* 三路缓存电角度(rad,供 VOFA 比对) */
 static float 				s_fAutoElecRad  = 0.0f;	/* Auto 自动电角度 */
@@ -174,8 +178,18 @@ float fMotorGetEncoderAbiElecRad(void)
 
 void vMotorCaptureEncoderZero(void)
 {
-	s_fSpiZeroRad = fAS5047PGetAngleRad(AS5047P);
-	s_fAbiZeroRad = fAS5047PEncGetAngleRad(AS5047P);
+	s_fSpiZeroRad = fAS5047PGetAngleRad(AS5047P) * s_fEncDir;
+	s_fAbiZeroRad = fAS5047PEncGetAngleRad(AS5047P) * s_fEncDir;
+}
+
+void vMotorSetEncoderDir(int8_t i8Dir)
+{
+	s_fEncDir = (i8Dir < 0) ? -1.0f : 1.0f;
+}
+
+int8_t i8MotorGetEncoderDir(void)
+{
+	return (s_fEncDir < 0.0f) ? -1 : 1;
 }
 
 /* ==================== 刷新 ==================== */
@@ -215,13 +229,13 @@ void vMotorAngleUpdate(void)
 	s_fAutoTheta  = fMotorNormalizeRad(s_fAutoTheta);
 	s_fAutoElecRad = s_fAutoTheta;
 
-	/** ② Encoder SPI: (机械角 - 零位) × 极对数,取模 */
-	fMech = fAS5047PGetAngleRad(AS5047P);
+	/** ② Encoder SPI: (方向×机械角 - 零位) × 极对数,取模 */
+	fMech = fAS5047PGetAngleRad(AS5047P) * s_fEncDir;
 	fRel  = fMech - s_fSpiZeroRad;
 	s_fSpiElecRad = fMotorNormalizeRad(fRel * (float)s_u16PolePairs);
 
-	/** ③ Encoder ABI: (机械角 - 零位) × 极对数,取模 */
-	fMech = fAS5047PEncGetAngleRad(AS5047P);
+	/** ③ Encoder ABI: (方向×机械角 - 零位) × 极对数,取模 */
+	fMech = fAS5047PEncGetAngleRad(AS5047P) * s_fEncDir;
 	fRel  = fMech - s_fAbiZeroRad;
 	s_fAbiElecRad = fMotorNormalizeRad(fRel * (float)s_u16PolePairs);
 
@@ -246,66 +260,4 @@ float fMotorGetElecAngleRad(void)
 float fMotorGetElecAngleDeg(void)
 {
 	return s_fOutRad * (360.0f / MOTOR_TWO_PI);
-}
-
-/* ==================== 运行控制 / 开环输出(原 App/app_motor.c,迁入) ==================== */
-/* 说明: 电流环已清除,本模块只保留开环电压模式。
- * 开环: 主循环 vMotorOpenLoopRun(fUdc) 按当前电角度逆Park→SVPWM→三相PWM。 */
-static uint8_t 	s_u8Run  = 0;			/* 运行标志 */
-static float 	s_fOlVd  = 0.0f;		/* 开环 d 轴电压(V) */
-static float 	s_fOlVq  = 0.0f;		/* 开环 q 轴电压(V) */
-
-void vMotorSetRun(uint8_t bRun)
-{
-	s_u8Run = (bRun) ? 1u : 0u;
-}
-
-uint8_t u8MotorGetRun(void)
-{
-	return s_u8Run;
-}
-
-void vMotorOpenLoopSetVd(float fVd)
-{
-	s_fOlVd = fVd;
-}
-
-void vMotorOpenLoopSetVq(float fVq)
-{
-	s_fOlVq = fVq;
-}
-
-float fMotorGetOpenLoopVd(void)
-{
-	return s_fOlVd;
-}
-
-float fMotorGetOpenLoopVq(void)
-{
-	return s_fOlVq;
-}
-
-/**
- * @brief 								开环运行一步输出(主循环周期调用)
- * @param		fUdc			母线电压(V),供 SVPWM 归一化
- * @note									仅在 运行 时,按当前 vd/vq 与电角度逆Park→SVPWM→三相PWM;
- * 									停止时直接返回。调用前需 vMotorAngleUpdate()。
- *
- * */
-void vMotorOpenLoopRun(float fUdc)
-{
-	T_Dq_t 			stDq;
-	T_AlphaBeta_t 	stAb;
-	float 			fDutyA, fDutyB, fDutyC;
-
-	if (s_u8Run == 0)
-	{
-		return;
-	}
-
-	stDq.fD = s_fOlVd;
-	stDq.fQ = s_fOlVq;
-	T_InvPark(&stDq, fMotorGetElecAngleRad(), &stAb);
-	SVPWM(&stAb, fUdc, &fDutyA, &fDutyB, &fDutyC);
-	vPwmSetDutyAll(PWM, fDutyA, fDutyB, fDutyC);
 }
